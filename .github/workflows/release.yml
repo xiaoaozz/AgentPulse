@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    env:
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+      APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run tests
+        run: |
+          swift test
+          node --test Tests/HookTests/*.test.mjs
+
+      - name: Validate signing configuration
+        run: |
+          configured=0
+          for value in "$MACOS_CERTIFICATE" "$MACOS_CERTIFICATE_PASSWORD" "$MACOS_SIGN_IDENTITY" "$APPLE_API_PRIVATE_KEY" "$APPLE_API_KEY_ID" "$APPLE_API_ISSUER_ID"; do
+            if [[ -n "$value" ]]; then configured=$((configured + 1)); fi
+          done
+          if [[ "$configured" -ne 0 && "$configured" -ne 6 ]]; then
+            echo "Signing is partially configured. Set all six release secrets or remove all of them."
+            exit 1
+          fi
+
+      - name: Import Developer ID certificate
+        if: ${{ env.MACOS_CERTIFICATE != '' }}
+        run: |
+          CERTIFICATE_PATH="$RUNNER_TEMP/developer-id.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/agentpulse.keychain-db"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$CERTIFICATE_PATH"
+          security create-keychain -p "$RUNNER_TEMP" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$RUNNER_TEMP" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$RUNNER_TEMP" "$KEYCHAIN_PATH"
+
+      - name: Prepare notarization key
+        if: ${{ env.MACOS_CERTIFICATE != '' }}
+        run: echo "$APPLE_API_PRIVATE_KEY" | base64 --decode > "$RUNNER_TEMP/AuthKey_$APPLE_API_KEY_ID.p8"
+
+      - name: Build signed and notarized release
+        if: ${{ env.MACOS_CERTIFICATE != '' }}
+        env:
+          VERSION: ${{ github.ref_name }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          SIGN_IDENTITY: ${{ env.MACOS_SIGN_IDENTITY }}
+          NOTARY_KEY_PATH: ${{ runner.temp }}/AuthKey_${{ env.APPLE_API_KEY_ID }}.p8
+          NOTARY_KEY_ID: ${{ env.APPLE_API_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ env.APPLE_API_ISSUER_ID }}
+        run: |
+          VERSION="${VERSION#v}" scripts/build-app.sh
+
+      - name: Build unsigned release
+        if: ${{ env.MACOS_CERTIFICATE == '' }}
+        env:
+          VERSION: ${{ github.ref_name }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          ARTIFACT_SUFFIX: -unsigned
+        run: |
+          VERSION="${VERSION#v}" scripts/build-app.sh
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/*.zip dist/*.sha256 --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/*.zip dist/*.sha256 --verify-tag --generate-notes --title "AgentPulse $GITHUB_REF_NAME"
+          fi

@@ -4,6 +4,7 @@
 # Swift Package Manager build artifacts and local workspace state
 .build/
 .swiftpm/
+dist/
 
 # Xcode per-user and derived data
 DerivedData/

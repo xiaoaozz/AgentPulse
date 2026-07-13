@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Swift tests
+        run: swift test
+      - name: Hook tests
+        run: node --test Tests/HookTests/*.test.mjs
+      - name: Verify release bundle can be built
+        env:
+          VERSION: 0.0.0-ci
+          BUILD_NUMBER: ${{ github.run_number }}
+          ARCHS: arm64
+          ARTIFACT_SUFFIX: -unsigned
+        run: scripts/build-app.sh
