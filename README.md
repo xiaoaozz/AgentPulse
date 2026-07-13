@@ -1,0 +1,361 @@
+# AgentPulse
+
+AgentPulse 是一个面向 macOS 的本地 Agent 会话状态面板。它集中展示多个 Codex、Claude Code 或自研 Agent 会话当前在做什么，以及哪些会话正在等待用户操作。
+
+AgentPulse 只做状态聚合和入口跳转，不代替 Agent 处理权限审批，也不会发送 macOS 通知。出现 `waiting_for_action` 时，应用会突出显示对应会话；点击会话后回到原 Agent 或终端继续处理。
+
+## 功能
+
+- 原生刘海常驻应用：默认不创建菜单栏或 Dock 图标，无需 Electron 常驻运行时。
+- 多会话聚合：同一 `session_id` 的事件会原地更新，并按处理优先级排序。
+- 待操作提示：刘海面板会优先展示等待操作的会话状态。
+- 刘海常驻面板：自动识别内置刘海屏幕，在刘海两侧显示英文状态和进行中会话数；悬停后以会话内容为标题，按最近使用时间倒序展示最多 5 个会话。
+- 快速返回：优先根据 `terminal_bundle_id` 或 `pid` 激活来源应用，缺少来源信息时尝试已运行的 Codex、iTerm2、Ghostty、Warp 或 Terminal。
+- 本机事件通道：通过权限为 `0600` 的 Unix Domain Socket 接收事件，不开放 TCP 端口。
+- Agent 无关协议：内置 Codex 和 Claude 风格 Hook 适配器，也允许任意程序直接发送 JSON。
+- 结果保留：`done`、`warning` 和 `failed` 会话会保留到用户点击“一键清理结果”。
+
+## 系统要求
+
+- macOS 14 或更高版本
+- 支持 Swift 6.1 package manifest 的 Swift 工具链
+- 接入 Codex 适配器时需要 Node.js
+- 接入 Python 适配器时需要 Python 3
+
+## 快速开始
+
+在项目根目录运行：
+
+```bash
+swift run AgentPulse
+```
+
+应用启动后只在刘海区域显示，并监听：
+
+```text
+/tmp/agentpulse.sock
+```
+
+可以先发送一条测试事件确认界面工作正常：
+
+```bash
+printf '%s' '{"session_id":"demo","agent":"Demo","cwd":"/tmp/demo","title":"README 演示","phase":"waiting_for_action","detail":"请回到会话确认"}' \
+  | nc -U /tmp/agentpulse.sock
+```
+
+点击该会话只会尝试激活来源应用；上面的测试事件没有提供来源信息，因此不保证跳转到特定窗口。
+
+### Release 构建
+
+```bash
+swift build -c release
+.build/release/AgentPulse
+```
+
+当前项目由 Swift Package Manager 直接构建可执行文件，尚未提供签名、打包或自动更新流程。
+
+## 接入 Codex
+
+项目提供 [`scripts/agent-pulse-codex-hook.mjs`](scripts/agent-pulse-codex-hook.mjs)。脚本采用 fire-and-forget 方式发送状态；AgentPulse 未运行或 Socket 不可用时，脚本会静默退出，不阻断 Codex。
+
+### 方式一：生命周期 Hooks（推荐）
+
+生命周期 Hooks 能展示 `idle`、`preparing`、`running`、`waiting_for_action` 和 `done` 的完整变化。将下面内容合并到 `~/.codex/hooks.json`，并把命令中的路径替换为本仓库脚本的绝对路径：
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /absolute/path/to/AgentPulse/scripts/agent-pulse-codex-hook.mjs",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /absolute/path/to/AgentPulse/scripts/agent-pulse-codex-hook.mjs",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /absolute/path/to/AgentPulse/scripts/agent-pulse-codex-hook.mjs",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /absolute/path/to/AgentPulse/scripts/agent-pulse-codex-hook.mjs",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /absolute/path/to/AgentPulse/scripts/agent-pulse-codex-hook.mjs",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /absolute/path/to/AgentPulse/scripts/agent-pulse-codex-hook.mjs",
+            "timeout": 2
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+首次添加或修改非托管 Hook 后，在 Codex CLI 中使用 `/hooks` 检查并信任对应定义，否则 Codex 会跳过执行。项目级配置也可以放在 `<repo>/.codex/hooks.json`，但只会在仓库被信任时加载。详细规则参见 [Codex Hooks 官方文档](https://developers.openai.com/codex/hooks)。
+
+事件映射如下：
+
+| Codex 事件 | AgentPulse 状态 |
+| --- | --- |
+| `SessionStart` | `idle` |
+| `UserPromptSubmit` | `preparing` |
+| `PreToolUse`、`PostToolUse` | `running` |
+| `PermissionRequest` | `waiting_for_action`（人工审批）或 `running`（替我审批） |
+| `Stop` | `done` |
+
+### 审批者模式
+
+Codex 的 `PermissionRequest` 表示工具需要审批，但审批者不一定是用户。AgentPulse 默认按人工审批处理，以保持现有接入兼容：
+
+```text
+PermissionRequest → waiting_for_action
+```
+
+如果 Codex 配置了 `approvals_reviewer = "auto_review"`（“替我审批”），请在 Hook 命令后增加：
+
+```bash
+node /absolute/path/to/AgentPulse/scripts/agent-pulse-codex-hook.mjs --approval-reviewer auto_review
+```
+
+此时 `PermissionRequest` 会继续显示为 `running`，详情为“Codex 正在代为审批”，不会计入待操作数量，也不会触发红色强调。也可以用环境变量配置相同语义：
+
+```bash
+AGENTPULSE_APPROVAL_REVIEWER=auto_review node /absolute/path/to/AgentPulse/scripts/agent-pulse-codex-hook.mjs
+```
+
+可用值如下：
+
+| 值 | `PermissionRequest` 状态 | 用途 |
+| --- | --- | --- |
+| `user` | `waiting_for_action` | 由用户审批；默认值 |
+| `auto_review` | `running` | 由 Codex reviewer agent 审批 |
+
+Codex 当前公开的 Hook 输入不包含 `approvals_reviewer`，因此适配器不能可靠地自动识别该设置。如果同一 Codex 会话还安装了其他会阻塞 `PermissionRequest` 的 Hook，也需要将那些 Hook 切换为非阻塞监控或移除对应监听，否则其他工具仍可能显示人工审批入口。
+
+### 方式二：`notify`（仅完成状态）
+
+如果只需要在一轮 Agent 工作完成后记录结果，可在用户级 `~/.codex/config.toml` 中配置：
+
+```toml
+notify = ["node", "/absolute/path/to/AgentPulse/scripts/agent-pulse-codex-hook.mjs"]
+```
+
+Codex 会把 `agent-turn-complete` JSON 作为命令行参数传给脚本。`notify` 当前不能提供执行中或等待审批的完整状态，因此不应与“完整生命周期监控”等同。详细说明参见 [Codex 高级配置中的 Notifications](https://developers.openai.com/codex/config-advanced#notifications)。
+
+如果同时配置生命周期 Hooks 和 `notify`，同一轮结束时可能收到两条 `done` 事件；它们使用相同会话 ID 时只会更新同一条会话记录。
+
+## 接入 Claude Code 或其他 Hook
+
+[`scripts/agentpulse-hook.py`](scripts/agentpulse-hook.py) 接收 stdin 中的 Claude 风格 Hook JSON，支持以下映射：
+
+| Hook 事件 | AgentPulse 状态 |
+| --- | --- |
+| `SessionStart` | `idle` |
+| `UserPromptSubmit` | `preparing` |
+| `PreToolUse`、`PostToolUse`、`PreCompact` | `running` |
+| `PermissionRequest` | `waiting_for_action` |
+| `Notification` 且类型为 `idle_prompt` 或 `permission_prompt` | `waiting_for_action` |
+| `Stop`、`SubagentStop`、`agent-turn-complete` | `done` |
+| `SessionEnd` | `offline` |
+
+在 Agent 的各个生命周期 Hook 中执行以下命令即可：
+
+```bash
+python3 /absolute/path/to/AgentPulse/scripts/agentpulse-hook.py
+```
+
+适配器不会修改 `~/.claude`、`~/.codex` 或其他 Agent 配置，请根据实际客户端支持的事件，将命令合并到现有 Hook 设置中。未知事件会被忽略，避免错误地覆盖当前会话状态。
+
+### 适配器环境变量
+
+| 变量 | 使用者 | 说明 |
+| --- | --- | --- |
+| `AGENTPULSE_SOCKET` | Node.js、Python | 覆盖默认 Socket 路径 `/tmp/agentpulse.sock` |
+| `AGENTPULSE_AGENT` | Python | 没有识别为 Codex 时使用的 Agent 名称，默认 `Agent` |
+| `TERM_PROGRAM` | Node.js、Python | 自动推断 Terminal、iTerm2、Ghostty 或 Warp 的 bundle identifier |
+
+Node.js 适配器还支持 `--source <name>`，用于覆盖界面显示的 Agent 名称：
+
+```bash
+node scripts/agent-pulse-codex-hook.mjs --source MyAgent
+```
+
+## 通用事件协议
+
+每次连接发送一个 UTF-8 JSON 对象，发送完成后关闭连接。服务端以连接结束作为消息结束标记，因此不要在同一次连接中连续发送多个对象。
+
+```json
+{
+  "session_id": "019f-session-id",
+  "agent": "MyAgent",
+  "cwd": "/Users/me/project",
+  "title": "修复登录流程",
+  "phase": "waiting_for_action",
+  "detail": "需要确认是否修改数据库结构",
+  "pid": 1234,
+  "tty": "/dev/ttys001",
+  "terminal_bundle_id": "com.googlecode.iterm2",
+  "occurred_at": "2026-07-13T03:20:00Z"
+}
+```
+
+### 字段
+
+| 字段 | 必填 | 类型 | 说明 |
+| --- | --- | --- | --- |
+| `session_id` | 是 | string | 会话唯一标识；相同 ID 的后续事件更新原记录 |
+| `agent` | 是 | string | 界面显示的 Agent 名称 |
+| `cwd` | 是 | string | 会话工作目录，也用于推断项目名和默认标题 |
+| `phase` | 是 | string | 下表中的状态值 |
+| `title` | 否 | string | 会话标题；空值或空白值不会覆盖已有标题 |
+| `detail` | 否 | string | 最近一次 Agent 输出摘要；缺失或空白时保留上一次非空摘要 |
+| `pid` | 否 | integer | 来源应用的进程 ID，用于点击会话时激活应用 |
+| `tty` | 否 | string | 来源 TTY；当前仅存储，尚未用于窗口定位 |
+| `terminal_bundle_id` | 否 | string | macOS 应用 bundle identifier，跳转时优先使用 |
+| `occurred_at` | 否 | string | 带或不带小数秒的 ISO 8601 时间；省略时使用服务端接收时间 |
+
+### 状态
+
+| `phase` | 显示名称 | 颜色 | 含义 | 计入进行中数量 | 可一键清理 |
+| --- | --- | --- | --- | --- | --- |
+| `idle` | Idle | `#9CA3AF` | 空闲，无任务 | 否 | 否 |
+| `preparing` | Preparing | `#3B82F6` | 初始化、准备执行 | 是 | 否 |
+| `running` | Running | `#F59E0B` | 正在执行任务 | 是 | 否 |
+| `waiting_for_action` | Waiting for Action | `#EF4444` | 等待用户操作 | 是 | 否 |
+| `done` | Done | `#22C55E` | 执行完成 | 否 | 是 |
+| `warning` | Warning | `#F97316` | 已完成，但存在警告或异常 | 否 | 是 |
+| `failed` | Failed | `#DC2626` | 执行失败 | 否 | 是 |
+| `paused` | Paused | `#8B5CF6` | 已暂停 | 是 | 否 |
+| `offline` | Offline | `#4B5563` | Agent 离线 | 否 | 否 |
+
+主会话列表排序优先级为：等待操作 → 执行中/准备中 → 暂停 → 空闲 → 完成/警告/失败 → 离线。同一优先级内，最近更新的会话排在前面。刘海展开区域独立按最近使用时间倒序展示，最多显示 5 条会话。
+
+## 界面行为
+
+- 列表标题中的“运行中”只统计 `preparing` 和 `running`；待操作数量单独显示。
+- 设置中的“待操作状态使用强调色”只控制会话行背景，状态圆点和文字颜色不受影响。
+- 点击会话只负责激活来源应用，不保证定位到某个终端标签页或 Codex 线程。
+- 如果没有刘海屏幕，常驻面板会回退到主屏幕顶部中央显示。
+- 会话仅保存在内存中；退出或重启 AgentPulse 后不会恢复历史记录。
+
+### 刘海面板
+
+- 折叠状态不显示状态图标，左侧以较大的英文文字完整显示最高优先级会话状态，例如 `Preparing...`、`Running...`、`Action` 和 `Done`；右侧显示进行中会话数。刘海两侧使用等宽布局，避免状态文字被截断或面板偏移。
+- 鼠标悬停后展开会话列表，按 `updatedAt` 从新到旧排列，最多显示最近 5 条会话。
+- 每条会话以最新内容摘要 `detail` 作为主标题；没有摘要时回退到会话标题 `title`。原标题作为辅助信息显示，不使用 `AgentPulse` 作为会话标题。
+- 每条会话都可以独立点击并尝试激活其来源应用；会话数量变化时，展开面板会同步调整高度。
+- 没有会话时只显示“等待 Agent 会话”，不展示额外的品牌标题。
+- 应用默认不显示 macOS 菜单栏或 Dock 图标；展开刘海面板后可点击底部的“退出 AgentPulse”安全退出。
+
+## 项目结构
+
+```text
+AgentPulse/
+├── Sources/AgentPulse/             # 刘海面板、设置与应用跳转
+├── Sources/AgentPulseCore/         # 事件模型、解码、会话仓库与 Socket 服务
+├── scripts/                        # Codex/Claude 风格 Hook 适配器
+├── Tests/AgentPulseCoreTests/      # Swift Core 单元与 Socket 测试
+├── Tests/HookTests/                # Node.js Hook 映射测试
+└── Package.swift
+```
+
+核心数据流：
+
+```text
+Agent Hook → Unix Socket → EventDecoder → SessionRepository → 刘海面板
+```
+
+## 开发与测试
+
+运行 Swift 测试：
+
+```bash
+swift test
+```
+
+运行 Node.js Hook 测试：
+
+```bash
+node --test Tests/HookTests/agent-pulse-codex-hook.test.mjs
+```
+
+测试覆盖事件时间解析、会话更新与排序、结果清理、Socket 延迟写入，以及 Codex Hook 的主要事件映射。
+
+## 故障排查
+
+### 刘海面板没有出现事件
+
+1. 确认 AgentPulse 正在运行。
+2. 检查 Socket 是否存在：`ls -l /tmp/agentpulse.sock`。
+3. 使用“快速开始”中的 `nc -U` 示例发送测试事件。
+4. 如果手工事件正常，检查 Hook 命令是否使用了正确的绝对路径，以及对应的 Node.js/Python 是否在 Hook 的 `PATH` 中。
+5. Codex 生命周期 Hook 还需在 `/hooks` 中完成信任审核。
+
+### Socket 存在但事件被拒绝
+
+- 确认 JSON 包含 `session_id`、`agent`、`cwd` 和合法的 `phase`。
+- `occurred_at` 必须是 ISO 8601 格式，例如 `2026-07-13T03:20:00Z` 或 `2026-07-13T03:20:00.123Z`。
+- 每个连接只发送一个完整 JSON 对象，并在发送后关闭连接。
+
+### 点击会话没有回到正确窗口
+
+建议在事件中提供 `terminal_bundle_id`；其次可提供来源应用的 `pid`。当前实现只激活应用，不读取终端标签页、TTY 或 Codex 线程的私有状态。
+
+### 异常退出后残留 Socket
+
+应用下次启动时会先删除同路径的旧 Socket 再重新监听。也可以在确认 AgentPulse 未运行后手动删除：
+
+```bash
+rm /tmp/agentpulse.sock
+```
+
+## 设计边界
+
+- AgentPulse 不批准、拒绝或修改任何 Agent 权限请求。
+- AgentPulse 不向 Hook 返回业务决策；Codex `Stop` Hook 仅输出空 JSON 以正常确认事件。
+- AgentPulse 不发送系统通知，不读取会话 transcript，也不把事件上传到网络。
+- 当前没有持久化、开机自启、应用签名、DMG 打包或自动更新能力。

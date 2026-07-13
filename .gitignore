@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+
+# Swift Package Manager build artifacts and local workspace state
+.build/
+.swiftpm/
+
+# Xcode per-user and derived data
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcuserstate
+
+# JetBrains IDE project metadata
+.idea/
+*.iml
+
+# Local configuration and runtime output
+.env
+.env.*
+!.env.example
+*.log
+
+# Python hook cache
+__pycache__/
+*.py[cod]
