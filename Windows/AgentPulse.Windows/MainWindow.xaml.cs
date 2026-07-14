@@ -2,14 +2,12 @@ using AgentPulse.Windows.Core.Models;
 using AgentPulse.Windows.Core.Services;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
 using WinRT.Interop;
 
 namespace AgentPulse.WindowsApp;
 
 public sealed partial class MainWindow : Window
 {
-    private readonly Action _exit;
     private readonly AppWindow _appWindow;
     private bool _isVisible;
 
@@ -19,8 +17,8 @@ public sealed partial class MainWindow : Window
     public MainWindow(SessionRepository repository, Action exit)
     {
         Repository = repository;
-        _exit = exit;
         InitializeComponent();
+        Content = new SessionPanelView(repository, JumpToSession, exit);
 
         WindowHandle = WindowNative.GetWindowHandle(this);
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(WindowHandle);
@@ -76,20 +74,9 @@ public sealed partial class MainWindow : Window
             HidePanel();
     }
 
-    private void Jump_Click(object sender, RoutedEventArgs args)
+    private void JumpToSession(AgentSession session)
     {
-        if ((sender as FrameworkElement)?.DataContext is not AgentSession session) return;
         WindowActivator.Activate(session);
         HidePanel();
     }
-
-    private void Remove_Click(object sender, RoutedEventArgs args)
-    {
-        if ((sender as FrameworkElement)?.DataContext is AgentSession session)
-            Repository.RemoveCompletedSession(session.Id);
-    }
-
-    private void ClearCompleted_Click(object sender, RoutedEventArgs args) => Repository.ClearCompleted();
-
-    private void Exit_Click(object sender, RoutedEventArgs args) => _exit();
 }
