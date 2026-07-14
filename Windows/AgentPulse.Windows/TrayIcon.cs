@@ -62,7 +62,7 @@ internal sealed class TrayIcon : IDisposable
         {
             var mouseMessage = (uint)((long)longParameter & 0xffff);
             if (mouseMessage is LeftButtonUp or RightButtonUp)
-                _dispatcher.TryEnqueue(_onInvoked);
+                _dispatcher.TryEnqueue(() => _onInvoked());
         }
         return DefSubclassProc(window, message, wordParameter, longParameter);
     }

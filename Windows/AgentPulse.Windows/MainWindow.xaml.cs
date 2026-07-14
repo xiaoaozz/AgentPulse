@@ -25,7 +25,7 @@ public sealed partial class MainWindow : Window
         WindowHandle = WindowNative.GetWindowHandle(this);
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(WindowHandle);
         _appWindow = AppWindow.GetFromWindowId(windowId);
-        _appWindow.Resize(new Windows.Graphics.SizeInt32(400, 520));
+        _appWindow.Resize(new global::Windows.Graphics.SizeInt32(400, 520));
         if (_appWindow.Presenter is OverlappedPresenter presenter)
         {
             presenter.IsResizable = false;
@@ -39,7 +39,7 @@ public sealed partial class MainWindow : Window
 
     public void InitializeHidden()
     {
-        _appWindow.Move(new Windows.Graphics.PointInt32(-10_000, -10_000));
+        _appWindow.Move(new global::Windows.Graphics.PointInt32(-10_000, -10_000));
         Activate();
         HidePanel();
     }
@@ -55,7 +55,7 @@ public sealed partial class MainWindow : Window
         var display = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
         var workArea = display.WorkArea;
         const int margin = 12;
-        _appWindow.Move(new Windows.Graphics.PointInt32(
+        _appWindow.Move(new global::Windows.Graphics.PointInt32(
             workArea.X + workArea.Width - _appWindow.Size.Width - margin,
             workArea.Y + workArea.Height - _appWindow.Size.Height - margin));
         NativeMethods.ShowWindow(WindowHandle, NativeMethods.ShowWindowCommand.Show);
