@@ -1,0 +1,55 @@
+{
+  "protocol_version": 1,
+  "scenarios": [
+    {
+      "name": "attention, active, and completed sessions share ordering and deletion semantics",
+      "events": [
+        {
+          "session_id": "active",
+          "agent": "Codex",
+          "cwd": "C:\\work\\active",
+          "title": "Active task",
+          "phase": "preparing",
+          "detail": "Preparing",
+          "pid": 1200,
+          "terminal_process": "WindowsTerminal.exe",
+          "occurred_at": "2026-07-14T01:00:00Z"
+        },
+        {
+          "session_id": "completed",
+          "agent": "Claude Code",
+          "cwd": "/work/completed",
+          "title": "Completed task",
+          "phase": "done",
+          "detail": "Finished",
+          "occurred_at": "2026-07-14T01:02:00Z"
+        },
+        {
+          "session_id": "attention",
+          "agent": "Codex",
+          "cwd": "/work/attention",
+          "title": "Approval needed",
+          "phase": "waiting_for_action",
+          "detail": "Approve command",
+          "occurred_at": "2026-07-14T01:03:00Z"
+        },
+        {
+          "session_id": "active",
+          "agent": "Codex",
+          "cwd": "C:\\work\\active",
+          "title": "Active task",
+          "phase": "running",
+          "detail": null,
+          "pid": 1200,
+          "terminal_process": "WindowsTerminal.exe",
+          "occurred_at": "2026-07-14T01:04:00Z"
+        }
+      ],
+      "expected_order": ["attention", "active", "completed"],
+      "expected_ongoing_count": 2,
+      "expected_clearable_count": 1,
+      "remove_ids": ["active", "completed"],
+      "expected_order_after_removals": ["attention", "active"]
+    }
+  ]
+}

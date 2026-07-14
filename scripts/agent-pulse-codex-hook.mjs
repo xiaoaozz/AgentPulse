@@ -4,15 +4,21 @@
  * Codex hook adapter for AgentPulse.
  *
  * Reads one Codex hook payload from stdin, translates it to AgentPulse's
- * agent-neutral event schema, and sends it over a local Unix socket. The hook
- * is deliberately fire-and-forget and never makes permission decisions.
+ * agent-neutral event schema, and sends it over a local Unix socket or Windows
+ * named pipe. The hook is deliberately fire-and-forget and never makes
+ * permission decisions.
  */
 
 import net from "node:net";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
-const socketPath = process.env.AGENTPULSE_SOCKET || "/tmp/agentpulse.sock";
+export function endpointForPlatform(platform = process.platform, env = process.env) {
+  return env.AGENTPULSE_SOCKET ||
+    (platform === "win32" ? String.raw`\\.\pipe\agentpulse` : "/tmp/agentpulse.sock");
+}
+
+const socketPath = endpointForPlatform();
 const sourceIndex = process.argv.indexOf("--source");
 const agent = sourceIndex >= 0 ? process.argv[sourceIndex + 1] || "Codex" : "Codex";
 const approvalReviewer = approvalReviewerForArgs(process.argv, process.env);
@@ -28,7 +34,37 @@ export function approvalReviewerForArgs(args, env = {}) {
   return value === "auto_review" ? "auto_review" : "user";
 }
 
-export function phaseFor(event, reviewer = "user") {
+function completionStatus(data) {
+  return data.params?.turn?.status || data.turn?.status || data.status || null;
+}
+
+function wasInterrupted(data) {
+  const status = completionStatus(data);
+  if (["interrupted", "cancelled", "canceled", "aborted"].includes(status)) {
+    return true;
+  }
+
+  const response = data.tool_response;
+  return [data, response].some((value) =>
+    value && typeof value === "object" &&
+    ["interrupted", "cancelled", "canceled", "aborted"].some(
+      (key) => value[key] === true,
+    )
+  );
+}
+
+export function phaseFor(event, reviewer = "user", data = {}) {
+  const interruptibleEvents = [
+    "PostToolUse",
+    "PostToolUseFailure",
+    "Stop",
+    "agent-turn-complete",
+    "turn/completed",
+  ];
+  if (interruptibleEvents.includes(event) && wasInterrupted(data)) {
+    return "paused";
+  }
+
   switch (event) {
     case "SessionStart":
       return "idle";
@@ -42,6 +78,8 @@ export function phaseFor(event, reviewer = "user") {
     case "Stop":
     case "agent-turn-complete":
       return "done";
+    case "turn/completed":
+      return completionStatus(data) === "failed" ? "failed" : "done";
     case "PostToolUseFailure":
       return "warning";
     case "SessionEnd":
@@ -51,14 +89,29 @@ export function phaseFor(event, reviewer = "user") {
   }
 }
 
-function terminalBundleId() {
-  const program = (process.env.TERM_PROGRAM || "").toLowerCase();
+function terminalBundleId(env = process.env) {
+  const program = (env.TERM_PROGRAM || "").toLowerCase();
   return {
     apple_terminal: "com.apple.Terminal",
     "iterm.app": "com.googlecode.iterm2",
     ghostty: "com.mitchellh.ghostty",
     warpterminal: "dev.warp.Warp-Stable",
   }[program] || null;
+}
+
+export function terminalProcessName(env = process.env, platform = process.platform) {
+  if (platform !== "win32") return null;
+  if (env.WT_SESSION) return "WindowsTerminal.exe";
+
+  const program = (env.TERM_PROGRAM || "").toLowerCase();
+  return {
+    vscode: "Code.exe",
+    "warpterminal": "Warp.exe",
+  }[program] || null;
+}
+
+export function projectNameForPath(cwd) {
+  return cwd.split(/[\\/]/).filter(Boolean).at(-1) || cwd;
 }
 
 function detailFor(event, payload, reviewer) {
@@ -74,6 +127,7 @@ function detailFor(event, payload, reviewer) {
     payload.assistant_message ||
     payload.message ||
     payload.error ||
+    payload.params?.turn?.error?.message ||
     payload.tool_error ||
     payload.tool_name ||
     (event === "UserPromptSubmit" ? payload.prompt : null) ||
@@ -86,19 +140,21 @@ export function eventPayload(
   fallbackCwd = process.cwd(),
   options = {},
 ) {
-  const event = data.hook_event_name || data.event || data.type || "";
+  const event =
+    data.hook_event_name || data.event || data.type || data.method || "";
   const reviewer = options.approvalReviewer || approvalReviewer;
-  const phase = phaseFor(event, reviewer);
+  const phase = phaseFor(event, reviewer, data);
   if (!phase) return null;
 
   const cwd = data.cwd || fallbackCwd;
   const sessionId =
     data.session_id ||
+    data.params?.threadId ||
     data.thread_id ||
     data["thread-id"] ||
     data.conversation_id ||
     "unknown";
-  const projectName = cwd.split("/").filter(Boolean).at(-1) || cwd;
+  const projectName = projectNameForPath(cwd);
 
   return {
     session_id: sessionId,
@@ -108,7 +164,8 @@ export function eventPayload(
     phase,
     detail: detailFor(event, data, reviewer),
     pid: process.ppid,
-    terminal_bundle_id: terminalBundleId(),
+    terminal_bundle_id: terminalBundleId(options.env),
+    terminal_process: terminalProcessName(options.env, options.platform),
     occurred_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
   };
 }

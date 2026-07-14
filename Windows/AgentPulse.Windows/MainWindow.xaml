@@ -1,0 +1,134 @@
+<Window
+    x:Class="AgentPulse.WindowsApp.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:AgentPulse.Windows.Core.Models">
+
+    <Grid Background="#F20D0D0D" Padding="14" RowSpacing="0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="52" />
+            <RowDefinition Height="38" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="42" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Center" Spacing="2">
+                <TextBlock Text="AgentPulse" FontSize="16" FontWeight="SemiBold" />
+                <TextBlock Opacity="0.55" FontSize="11">
+                    <Run Text="{x:Bind Repository.OngoingCount, Mode=OneWay}" />
+                    <Run Text=" 个会话进行中" />
+                </TextBlock>
+            </StackPanel>
+            <Button
+                Grid.Column="1"
+                Click="ClearCompleted_Click"
+                IsEnabled="{x:Bind Repository.HasClearable, Mode=OneWay}"
+                Background="Transparent"
+                BorderThickness="0"
+                Padding="8,5"
+                ToolTipService.ToolTip="清除所有已完成、警告和失败的会话">
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                    <SymbolIcon Symbol="Delete" Width="12" />
+                    <TextBlock Text="清除已完成" FontSize="11" />
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <Border Grid.Row="1" BorderBrush="#20FFFFFF" BorderThickness="0,1,0,1">
+            <TextBlock
+                Text="最近会话"
+                VerticalAlignment="Center"
+                FontSize="11"
+                Opacity="0.45" />
+        </Border>
+
+        <ListView
+            x:Name="SessionList"
+            Grid.Row="2"
+            ItemsSource="{x:Bind Repository.Sessions, Mode=OneWay}"
+            SelectionMode="None"
+            IsItemClickEnabled="False"
+            HorizontalContentAlignment="Stretch"
+            Background="Transparent">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="models:AgentSession">
+                    <Border MinHeight="64" BorderBrush="#16FFFFFF" BorderThickness="0,0,0,1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="36" />
+                            </Grid.ColumnDefinitions>
+                            <Button
+                                Grid.Column="0"
+                                Click="Jump_Click"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Padding="4,8"
+                                HorizontalContentAlignment="Stretch"
+                                ToolTipService.ToolTip="跳转到这个会话">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="24" />
+                                    </Grid.ColumnDefinitions>
+                                    <Ellipse Width="8" Height="8" Fill="{ThemeResource AccentFillColorDefaultBrush}" />
+                                    <StackPanel Grid.Column="1" Spacing="3" Margin="8,0,4,0">
+                                        <Grid>
+                                            <TextBlock Text="{x:Bind Headline}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{x:Bind Agent}" FontSize="10" Opacity="0.45" HorizontalAlignment="Right" />
+                                        </Grid>
+                                        <TextBlock Text="{x:Bind Subtitle}" FontSize="11" Opacity="0.62" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="↗" Opacity="0.45" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                </Grid>
+                            </Button>
+                            <Button
+                                Grid.Column="1"
+                                Click="Remove_Click"
+                                Visibility="{x:Bind CanRemove, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                Width="26"
+                                Height="26"
+                                Padding="0"
+                                Background="#12FFFFFF"
+                                BorderThickness="0"
+                                CornerRadius="13"
+                                ToolTipService.ToolTip="删除这个已完成会话">
+                                <TextBlock Text="×" FontSize="14" Opacity="0.65" />
+                            </Button>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+        <Grid Grid.Row="3" BorderBrush="#20FFFFFF" BorderThickness="0,1,0,0">
+            <Button
+                Click="Exit_Click"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Bottom"
+                Width="28"
+                Height="28"
+                Padding="0"
+                CornerRadius="14"
+                Foreground="#FFFF6B6B"
+                Background="#20FF4D4D"
+                BorderThickness="0"
+                ToolTipService.ToolTip="退出 AgentPulse">
+                <TextBlock Text="⏻" FontSize="13" />
+            </Button>
+        </Grid>
+    </Grid>
+</Window>

@@ -32,6 +32,10 @@ public final class SessionRepository: ObservableObject {
         sessions.removeAll { $0.phase.isClearable }
     }
 
+    public func removeCompletedSession(id: AgentSession.ID) {
+        sessions.removeAll { $0.id == id && $0.phase.isClearable }
+    }
+
     private func sortSessions() {
         sessions.sort {
             let left = priority($0.phase)

@@ -25,6 +25,7 @@ jobs:
         run: |
           swift test
           node --test Tests/HookTests/*.test.mjs
+          python3 -m unittest discover -s Tests/HookTests -p 'test_*.py'
 
       - name: Validate signing configuration
         run: |
@@ -84,3 +85,28 @@ jobs:
           else
             gh release create "$GITHUB_REF_NAME" dist/*.zip dist/*.sha256 --verify-tag --generate-notes --title "AgentPulse $GITHUB_REF_NAME"
           fi
+
+  windows-release:
+    needs: release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Run shared protocol contract tests
+        run: >-
+          dotnet run
+          --project Windows/AgentPulse.Windows.ContractTests/AgentPulse.Windows.ContractTests.csproj
+          --configuration Release
+          -- Protocol/Fixtures/session-scenarios.json
+      - name: Build Windows release
+        shell: pwsh
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: scripts/build-windows.ps1 -Version ($env:VERSION -replace '^v', '') -Runtime win-x64
+      - name: Upload Windows release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload $env:GITHUB_REF_NAME dist/*.zip dist/*.sha256 --clobber

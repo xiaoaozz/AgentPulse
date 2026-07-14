@@ -104,8 +104,8 @@ final class NotchPanelController {
         let collapsedWidth = max(290, detectedNotchWidth + 220)
         let displayedSessionCount = min(repository.sessions.count, 5)
         let expandedHeight = displayedSessionCount == 0
-            ? 144
-            : 79 + CGFloat(displayedSessionCount * 65)
+            ? 178
+            : 113 + CGFloat(displayedSessionCount * 65)
         return expanded
             ? NSSize(width: max(380, collapsedWidth), height: expandedHeight)
             : NSSize(width: collapsedWidth, height: 38)

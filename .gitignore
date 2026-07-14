@@ -6,6 +6,10 @@
 .swiftpm/
 dist/
 
+# .NET / Windows build artifacts
+bin/
+obj/
+
 # Xcode per-user and derived data
 DerivedData/
 *.xcodeproj/xcuserdata/

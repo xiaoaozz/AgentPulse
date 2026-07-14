@@ -13,7 +13,9 @@ jobs:
       - name: Swift tests
         run: swift test
       - name: Hook tests
-        run: node --test Tests/HookTests/*.test.mjs
+        run: |
+          node --test Tests/HookTests/*.test.mjs
+          python3 -m unittest discover -s Tests/HookTests -p 'test_*.py'
       - name: Verify release bundle can be built
         env:
           VERSION: 0.0.0-ci
@@ -21,3 +23,26 @@ jobs:
           ARCHS: arm64
           ARTIFACT_SUFFIX: -unsigned
         run: scripts/build-app.sh
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Shared protocol contract tests
+        run: >-
+          dotnet run
+          --project Windows/AgentPulse.Windows.ContractTests/AgentPulse.Windows.ContractTests.csproj
+          --configuration Release
+          -- Protocol/Fixtures/session-scenarios.json
+      - name: Build Windows client
+        run: >-
+          dotnet build
+          Windows/AgentPulse.Windows/AgentPulse.Windows.csproj
+          --configuration Release
+          -p:Platform=x64
+      - name: Verify Windows release bundle
+        shell: pwsh
+        run: scripts/build-windows.ps1 -Version 0.0.0-ci -Runtime win-x64

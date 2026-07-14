@@ -25,6 +25,18 @@ final class SessionRepositoryTests: XCTestCase {
         XCTAssertTrue(repository.sessions.isEmpty)
     }
 
+    func testRemovingOneCompletedSessionDoesNotRemoveActiveSessions() {
+        let repository = SessionRepository()
+        repository.receive(.init(sessionId: "running", agent: "Custom", cwd: "/tmp/A", phase: .running))
+        repository.receive(.init(sessionId: "done", agent: "Custom", cwd: "/tmp/B", phase: .done))
+
+        repository.removeCompletedSession(id: "running")
+        XCTAssertEqual(repository.sessions.map(\.id), ["running", "done"])
+
+        repository.removeCompletedSession(id: "done")
+        XCTAssertEqual(repository.sessions.map(\.id), ["running"])
+    }
+
     func testResultSessionsDoNotContributeToOngoingCount() {
         let repository = SessionRepository()
         repository.receive(.init(sessionId: "running", agent: "Custom", cwd: "/tmp/A", phase: .running))
