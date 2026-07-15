@@ -8,9 +8,24 @@ let package = Package(
         .executable(name: "AgentPulse", targets: ["AgentPulse"]),
         .library(name: "AgentPulseCore", targets: ["AgentPulseCore"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.2"),
+    ],
     targets: [
         .target(name: "AgentPulseCore"),
-        .executableTarget(name: "AgentPulse", dependencies: ["AgentPulseCore"]),
+        .executableTarget(
+            name: "AgentPulse",
+            dependencies: [
+                "AgentPulseCore",
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-rpath",
+                    "-Xlinker", "@executable_path/../Frameworks",
+                ]),
+            ]
+        ),
         .testTarget(name: "AgentPulseCoreTests", dependencies: ["AgentPulseCore"]),
     ]
 )

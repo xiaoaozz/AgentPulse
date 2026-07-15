@@ -11,9 +11,11 @@ $Dist = Join-Path $Root "dist"
 $Publish = Join-Path $Dist "AgentPulse-$Runtime"
 $Archive = Join-Path $Dist "AgentPulse-$Version-$Runtime.zip"
 $Checksum = "$Archive.sha256"
+$VelopackOutput = Join-Path $Dist "velopack-$Runtime"
+$ToolDirectory = Join-Path $Dist ".tools"
 $Platform = if ($Runtime -eq "win-arm64") { "ARM64" } else { "x64" }
 
-Remove-Item $Publish, $Archive, $Checksum -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item $Publish, $Archive, $Checksum, $VelopackOutput -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Publish | Out-Null
 
 dotnet publish $Project `
@@ -35,4 +37,19 @@ Compress-Archive -Path (Join-Path $Publish "*") -DestinationPath $Archive
 $Hash = (Get-FileHash -Algorithm SHA256 $Archive).Hash.ToLowerInvariant()
 "$Hash *$(Split-Path -Leaf $Archive)" | Set-Content -Encoding ascii $Checksum
 
+if (-not (Test-Path (Join-Path $ToolDirectory "vpk.exe"))) {
+    dotnet tool install vpk --tool-path $ToolDirectory --version 1.2.0
+}
+
+& (Join-Path $ToolDirectory "vpk.exe") pack `
+    --packId io.github.xiaoaozz.AgentPulse `
+    --packVersion $Version `
+    --packDir $Publish `
+    --runtime $Runtime `
+    --mainExe AgentPulse.Windows.exe `
+    --packTitle AgentPulse `
+    --packAuthors "AgentPulse contributors" `
+    --outputDir $VelopackOutput
+
 Write-Host "Created $Archive"
+Write-Host "Created Velopack installer and update packages in $VelopackOutput"

@@ -18,6 +18,8 @@ jobs:
       APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
       APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
       APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+      SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
+      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v6
 
@@ -36,6 +38,12 @@ jobs:
           if [[ "$configured" -ne 0 && "$configured" -ne 6 ]]; then
             echo "Signing is partially configured. Set all six release secrets or remove all of them."
             exit 1
+          fi
+          if [[ -n "$SPARKLE_PUBLIC_KEY" || -n "$SPARKLE_PRIVATE_KEY" ]]; then
+            if [[ -z "$SPARKLE_PUBLIC_KEY" || -z "$SPARKLE_PRIVATE_KEY" ]]; then
+              echo "Sparkle is partially configured. Set both SPARKLE_PUBLIC_KEY and SPARKLE_PRIVATE_KEY."
+              exit 1
+            fi
           fi
 
       - name: Import Developer ID certificate
@@ -76,14 +84,35 @@ jobs:
         run: |
           VERSION="${VERSION#v}" scripts/build-app.sh
 
+      - name: Generate Sparkle appcast
+        if: ${{ env.SPARKLE_PUBLIC_KEY != '' }}
+        env:
+          SPARKLE_VERSION: 2.9.2
+        run: |
+          curl -fL "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" \
+            -o "$RUNNER_TEMP/sparkle.tar.xz"
+          mkdir -p "$RUNNER_TEMP/sparkle" "$RUNNER_TEMP/appcast-input"
+          tar -xf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle"
+          cp dist/AgentPulse-*-macos-*.zip "$RUNNER_TEMP/appcast-input/"
+          echo "$SPARKLE_PRIVATE_KEY" | "$RUNNER_TEMP/sparkle/bin/generate_appcast" \
+            --ed-key-file - \
+            --download-url-prefix "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/" \
+            --full-release-notes-url "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}" \
+            -o "$GITHUB_WORKSPACE/dist/appcast.xml" \
+            "$RUNNER_TEMP/appcast-input"
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          assets=(dist/*.zip dist/*.sha256)
+          if [[ -f dist/appcast.xml ]]; then
+            assets+=(dist/appcast.xml)
+          fi
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" dist/*.zip dist/*.sha256 --clobber
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" dist/*.zip dist/*.sha256 --verify-tag --generate-notes --title "AgentPulse $GITHUB_REF_NAME"
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" --verify-tag --generate-notes --title "AgentPulse $GITHUB_REF_NAME"
           fi
 
   windows-release:
@@ -109,4 +138,9 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload $env:GITHUB_REF_NAME dist/*.zip dist/*.sha256 --clobber
+        run: >-
+          gh release upload $env:GITHUB_REF_NAME
+          dist/*.zip
+          dist/*.sha256
+          dist/velopack-win-x64/*
+          --clobber

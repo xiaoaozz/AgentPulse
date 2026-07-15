@@ -14,6 +14,8 @@ final class NotchPanelController {
     init(
         repository: SessionRepository,
         onJump: @escaping (AgentSession) -> Void,
+        canCheckForUpdates: Bool,
+        onCheckForUpdates: @escaping () -> Void,
         onQuit: @escaping () -> Void
     ) {
         self.repository = repository
@@ -40,6 +42,8 @@ final class NotchPanelController {
             repository: repository,
             onHoverChanged: { [weak self] expanded in self?.setExpanded(expanded) },
             onJump: onJump,
+            canCheckForUpdates: canCheckForUpdates,
+            onCheckForUpdates: onCheckForUpdates,
             onQuit: onQuit
         )
         panel.contentView = NSHostingView(rootView: root)

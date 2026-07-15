@@ -9,6 +9,8 @@ struct NotchView: View {
     @ObservedObject var repository: SessionRepository
     let onHoverChanged: (Bool) -> Void
     let onJump: (AgentSession) -> Void
+    let canCheckForUpdates: Bool
+    let onCheckForUpdates: () -> Void
     let onQuit: () -> Void
     @State private var expanded = false
     @State private var hoverTransitionTask: Task<Void, Never>?
@@ -107,6 +109,17 @@ struct NotchView: View {
     private var expandedFooter: some View {
         HStack {
             Spacer()
+            Button(action: onCheckForUpdates) {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 26, height: 26)
+                    .background(.white.opacity(0.07), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white.opacity(canCheckForUpdates ? 0.72 : 0.28))
+            .disabled(!canCheckForUpdates)
+            .help(canCheckForUpdates ? "检查 AgentPulse 更新" : "源码运行版本未配置更新源")
+
             Button(action: onQuit) {
                 Image(systemName: "power")
                     .font(.system(size: 11, weight: .semibold))

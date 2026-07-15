@@ -29,3 +29,6 @@ DerivedData/
 # Python hook cache
 __pycache__/
 *.py[cod]
+
+# key
+*private-key

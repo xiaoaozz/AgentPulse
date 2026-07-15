@@ -1,5 +1,6 @@
 using AgentPulse.Windows.Core.Services;
 using Microsoft.UI.Xaml;
+using Velopack;
 
 namespace AgentPulse.WindowsApp;
 
@@ -14,6 +15,7 @@ public partial class App : Application
 
     public App()
     {
+        VelopackApp.Build().Run();
         _singleInstance = new Mutex(true, "Local\\AgentPulse", out _ownsMutex);
         InitializeComponent();
     }
@@ -27,7 +29,8 @@ public partial class App : Application
         }
 
         var repository = new SessionRepository();
-        _window = new MainWindow(repository, ExitAsync);
+        var updateService = new UpdateService(ExitAsync);
+        _window = new MainWindow(repository, updateService, ExitAsync);
         _window.InitializeHidden();
         _trayIcon = new TrayIcon(
             _window.WindowHandle,
@@ -42,6 +45,7 @@ public partial class App : Application
             _window.DispatcherQueue.TryEnqueue(() => repository.Receive(value));
         });
         _server.Start();
+        _ = updateService.CheckForUpdatesAsync();
     }
 
     private async void ExitAsync()
