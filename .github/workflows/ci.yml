@@ -45,4 +45,4 @@ jobs:
           -p:Platform=x64
       - name: Verify Windows release bundle
         shell: pwsh
-        run: scripts/build-windows.ps1 -Version 0.0.0-ci -Runtime win-x64
+        run: scripts/build-windows.ps1 -Version 0.0.1-ci -Runtime win-x64
