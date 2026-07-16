@@ -116,23 +116,77 @@ export function projectNameForPath(cwd) {
 
 function detailFor(event, payload, reviewer) {
   if (event === "PermissionRequest" && reviewer === "auto_review") {
-    return payload.tool_name
+    return conciseContent(payload.tool_name
       ? `Codex 正在代为审批：${payload.tool_name}`
-      : "Codex 正在代为审批";
+      : "Codex 正在代为审批");
   }
 
-  return (
+  if (event === "UserPromptSubmit") {
+    return promptContent(payload);
+  }
+
+  if (event === "PermissionRequest") {
+    return conciseContent(payload.message || (
+      payload.tool_name ? `等待确认：${payload.tool_name}` : "等待用户确认"
+    ));
+  }
+
+  // Tool lifecycle payloads commonly only contain `tool_name`. Treating that
+  // as session content replaces the user's prompt with values such as "Bash".
+  // Returning no detail lets the repository retain the current turn summary.
+  return conciseContent(
     payload.last_assistant_message ||
     payload["last-assistant-message"] ||
     payload.assistant_message ||
-    payload.message ||
     payload.error ||
     payload.params?.turn?.error?.message ||
     payload.tool_error ||
-    payload.tool_name ||
-    (event === "UserPromptSubmit" ? payload.prompt : null) ||
+    (event !== "PreToolUse" && event !== "PostToolUse" ? payload.message : null) ||
     null
   );
+}
+
+function promptContent(payload) {
+  return conciseContent(
+    payload.prompt ||
+    payload.user_prompt ||
+    payload.userPrompt ||
+    payload.input_messages ||
+    payload["input-messages"] ||
+    payload.input ||
+    payload.message ||
+    payload.params?.prompt ||
+    payload.params?.input
+  );
+}
+
+function titleFor(event, payload, projectName) {
+  if (event === "UserPromptSubmit" || event === "agent-turn-complete") {
+    return promptContent(payload) || conciseContent(payload.title) || null;
+  }
+
+  // Only the session-start event may use the project as a fallback title.
+  // Sending it for every tool event would overwrite the current prompt.
+  return event === "SessionStart"
+    ? conciseContent(payload.title) || projectName
+    : null;
+}
+
+export function conciseContent(value, maxLength = 80) {
+  if (Array.isArray(value)) {
+    value = value
+      .map((item) => typeof item === "string" ? item : item?.text || item?.content)
+      .filter((item) => typeof item === "string")
+      .join(" ");
+  }
+  if (typeof value !== "string") return null;
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) return null;
+
+  const characters = Array.from(normalized);
+  return characters.length <= maxLength
+    ? normalized
+    : `${characters.slice(0, maxLength - 3).join("")}...`;
 }
 
 export function eventPayload(
@@ -160,7 +214,7 @@ export function eventPayload(
     session_id: sessionId,
     agent: agent === "codex" ? "Codex" : agent,
     cwd,
-    title: data.title || projectName,
+    title: titleFor(event, data, projectName),
     phase,
     detail: detailFor(event, data, reviewer),
     pid: process.ppid,

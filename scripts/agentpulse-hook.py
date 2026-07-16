@@ -85,6 +85,69 @@ def terminal_process_name(platform=sys.platform, env=os.environ):
     }.get(env.get("TERM_PROGRAM", "").lower())
 
 
+def concise_content(value, max_length=80):
+    if isinstance(value, list):
+        parts = []
+        for item in value:
+            candidate = item if isinstance(item, str) else (
+                item.get("text") or item.get("content") if isinstance(item, dict) else None
+            )
+            if isinstance(candidate, str):
+                parts.append(candidate)
+        value = " ".join(parts)
+    if not isinstance(value, str):
+        return None
+    normalized = " ".join(value.split())
+    if not normalized:
+        return None
+    return normalized if len(normalized) <= max_length else normalized[: max_length - 3] + "..."
+
+
+def prompt_content(data):
+    params = data.get("params") or {}
+    return concise_content(
+        data.get("prompt")
+        or data.get("user_prompt")
+        or data.get("userPrompt")
+        or data.get("input_messages")
+        or data.get("input-messages")
+        or data.get("input")
+        or data.get("message")
+        or params.get("prompt")
+        or params.get("input")
+    )
+
+
+def title_for(event, data, project_name):
+    if event in ("UserPromptSubmit", "agent-turn-complete"):
+        return prompt_content(data) or concise_content(data.get("title"))
+    if event == "SessionStart":
+        return concise_content(data.get("title")) or project_name
+    return None
+
+
+def detail_for(event, data):
+    if event == "UserPromptSubmit":
+        return prompt_content(data)
+    if event == "PermissionRequest":
+        return concise_content(
+            data.get("message")
+            or (f"等待确认：{data['tool_name']}" if data.get("tool_name") else "等待用户确认")
+        )
+
+    # Do not replace the current turn summary with a tool name such as "Bash".
+    return concise_content(
+        data.get("last_assistant_message")
+        or data.get("assistant_message")
+        or data.get("error")
+        or (
+            ((data.get("params") or {}).get("turn") or {}).get("error") or {}
+        ).get("message")
+        or data.get("tool_error")
+        or (data.get("message") if event not in ("PreToolUse", "PostToolUse") else None)
+    )
+
+
 def send_payload(encoded, platform=sys.platform, endpoint=None):
     endpoint = endpoint or transport_endpoint(platform)
     if platform == "win32":
@@ -118,25 +181,19 @@ def main():
         return
     transcript = data.get("transcript_path", "") or ""
     agent = "Codex" if "/.codex/" in transcript else os.environ.get("AGENTPULSE_AGENT", "Agent")
-    detail = (
-        data.get("last_assistant_message")
-        or data.get("assistant_message")
-        or data.get("message")
-        or data.get("tool_name")
-        or (
-            ((data.get("params") or {}).get("turn") or {}).get("error") or {}
-        ).get("message")
-    )
+    detail = detail_for(event, data)
     session_id = (
         data.get("session_id")
         or (data.get("params") or {}).get("threadId")
         or "unknown"
     )
+    cwd = data.get("cwd", os.getcwd())
+    project_name = ntpath.basename(cwd.rstrip("/\\"))
     payload = {
         "session_id": session_id,
         "agent": agent,
-        "cwd": data.get("cwd", os.getcwd()),
-        "title": data.get("title") or ntpath.basename(data.get("cwd", os.getcwd()).rstrip("/\\")),
+        "cwd": cwd,
+        "title": title_for(event, data, project_name),
         "phase": phase,
         "detail": detail,
         "pid": os.getppid(),

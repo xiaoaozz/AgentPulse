@@ -15,8 +15,8 @@ public sealed class AgentSession
 
     public bool CanRemove => Phase.IsClearable();
     public string PhaseLabel => Phase.Label();
-    public string Headline => string.IsNullOrWhiteSpace(Detail) ? Title : Detail;
-    public string Subtitle => string.IsNullOrWhiteSpace(Detail) ? PhaseLabel : Title;
+    public string Headline => Title;
+    public string Subtitle => string.IsNullOrWhiteSpace(Detail) ? PhaseLabel : Detail;
 
     public static AgentSession FromEvent(AgentEvent value, DateTimeOffset? now = null) => new()
     {

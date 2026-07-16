@@ -356,7 +356,7 @@ node scripts/agent-pulse-codex-hook.mjs --source MyAgent
 | `cwd` | 是 | string | 会话工作目录，也用于推断项目名和默认标题 |
 | `phase` | 是 | string | 下表中的状态值 |
 | `title` | 否 | string | 会话标题；空值或空白值不会覆盖已有标题 |
-| `detail` | 否 | string | 最近一次 Agent 输出摘要；缺失或空白时保留上一次非空摘要 |
+| `detail` | 否 | string | 本轮会话的简短内容（用户输入、Agent 输出或错误摘要）；缺失或空白时保留上一次非空摘要 |
 | `pid` | 否 | integer | 来源应用的进程 ID，用于点击会话时激活应用 |
 | `tty` | 否 | string | 来源 TTY；当前仅存储，尚未用于窗口定位 |
 | `terminal_bundle_id` | 否 | string | macOS 应用 bundle identifier，跳转时优先使用 |
@@ -390,7 +390,7 @@ node scripts/agent-pulse-codex-hook.mjs --source MyAgent
 
 - 折叠状态不显示状态图标，左侧以较大的英文文字完整显示最高优先级会话状态，例如 `Preparing...`、`Running...`、`Action` 和 `Done`；右侧显示进行中会话数。刘海两侧使用等宽布局，避免状态文字被截断或面板偏移。
 - 鼠标稳定悬停约 180ms 后展开会话列表，按 `updatedAt` 从新到旧排列，最多显示最近 5 条会话。
-- 每条会话以最新内容摘要 `detail` 作为主标题；没有摘要时回退到会话标题 `title`。原标题作为辅助信息显示，不使用 `AgentPulse` 作为会话标题。
+- 每条会话以本轮用户消息 `title` 作为主标题，最新 Agent 输出 `detail` 作为辅助信息。Hook 会将用户消息压缩为空白规整的单行标题，超过 80 个字符时以 `...` 省略；后续工具事件不会再用项目名或 `Bash` 等工具名覆盖本轮内容。
 - 每条会话都可以独立点击并尝试激活其来源应用；会话数量变化时，展开面板会同步调整高度。
 - 没有会话时只显示“等待 Agent 会话”，不展示额外的品牌标题。
 - 应用默认不显示 macOS 菜单栏或 Dock 图标；展开刘海面板后可点击右下角电源图标安全退出。

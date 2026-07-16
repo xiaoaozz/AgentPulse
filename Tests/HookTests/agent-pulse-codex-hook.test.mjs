@@ -3,12 +3,64 @@ import test from "node:test";
 
 import {
   approvalReviewerForArgs,
+  conciseContent,
   endpointForPlatform,
   eventPayload,
   phaseFor,
   projectNameForPath,
   terminalProcessName,
 } from "../../scripts/agent-pulse-codex-hook.mjs";
+
+test("session content is flattened and shortened for the list", () => {
+  assert.equal(conciseContent("  修复登录\n流程  "), "修复登录 流程");
+  assert.equal(conciseContent("一".repeat(81)), `${"一".repeat(77)}...`);
+});
+
+test("the current prompt survives tool lifecycle events", () => {
+  const prompt = eventPayload({
+    hook_event_name: "UserPromptSubmit",
+    session_id: "session-content",
+    cwd: "/tmp/AgentPulse",
+    prompt: "请帮我修复\n会话列表显示",
+  });
+  const tool = eventPayload({
+    hook_event_name: "PreToolUse",
+    session_id: "session-content",
+    cwd: "/tmp/AgentPulse",
+    tool_name: "Bash",
+    title: "AgentPulse",
+  });
+
+  assert.equal(prompt.detail, "请帮我修复 会话列表显示");
+  assert.equal(prompt.title, "请帮我修复 会话列表显示");
+  assert.equal(tool.detail, null);
+  assert.equal(tool.title, null);
+});
+
+test("Codex notify input messages become the session title", () => {
+  const payload = eventPayload({
+    type: "agent-turn-complete",
+    "thread-id": "notify-content",
+    cwd: "/tmp/AgentPulse",
+    "input-messages": ["帮我优化", "会话内容展示"],
+    "last-assistant-message": "已经完成修改",
+  });
+
+  assert.equal(payload.title, "帮我优化 会话内容展示");
+  assert.equal(payload.detail, "已经完成修改");
+});
+
+test("alternate prompt fields can provide the session title", () => {
+  const payload = eventPayload({
+    hook_event_name: "UserPromptSubmit",
+    session_id: "alternate-prompt",
+    cwd: "/tmp/AgentPulse",
+    user_prompt: "优化会话内容展示",
+  });
+
+  assert.equal(payload.title, "优化会话内容展示");
+  assert.equal(payload.detail, "优化会话内容展示");
+});
 
 test("transport endpoint follows the host platform and allows an override", () => {
   assert.equal(endpointForPlatform("darwin", {}), "/tmp/agentpulse.sock");
@@ -35,7 +87,7 @@ test("Windows paths and terminals produce Windows metadata", () => {
     undefined,
     { env: { WT_SESSION: "session" }, platform: "win32" },
   );
-  assert.equal(payload.title, "AgentPulse");
+  assert.equal(payload.title, null);
   assert.equal(payload.terminal_process, "WindowsTerminal.exe");
 });
 
@@ -120,7 +172,7 @@ test("manual approval remains a user action by default", () => {
   });
 
   assert.equal(payload.phase, "waiting_for_action");
-  assert.equal(payload.detail, "Bash");
+  assert.equal(payload.detail, "等待确认：Bash");
 });
 
 test("auto-review approval remains running without requesting user action", () => {

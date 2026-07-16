@@ -95,7 +95,7 @@ private struct SessionRow: View {
                 Circle().fill(color).frame(width: 9, height: 9)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text(session.title).lineLimit(1).font(.subheadline.weight(.medium))
+                        Text(headline).lineLimit(1).font(.subheadline.weight(.medium))
                         Spacer()
                         Text(session.agent).font(.caption2).foregroundStyle(.secondary)
                     }
@@ -107,9 +107,7 @@ private struct SessionRow: View {
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    if let detail = session.detail, !detail.isEmpty {
-                        Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                    }
+                    Text(subtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Image(systemName: "arrow.up.forward.app").foregroundStyle(.tertiary)
             }
@@ -127,5 +125,13 @@ private struct SessionRow: View {
 
     private var background: Color {
         session.phase.needsAttention && emphasizeAttention ? color.opacity(0.10) : Color.primary.opacity(0.04)
+    }
+
+    private var headline: String {
+        session.title
+    }
+
+    private var subtitle: String {
+        session.detail ?? session.phase.meaning
     }
 }

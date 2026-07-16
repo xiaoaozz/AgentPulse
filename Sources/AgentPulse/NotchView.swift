@@ -214,10 +214,10 @@ struct NotchView: View {
     }
 
     private func sessionHeadline(for session: AgentSession) -> String {
-        session.detail ?? session.title
+        session.title
     }
 
     private func sessionSubtitle(for session: AgentSession) -> String {
-        session.detail == nil ? session.phase.meaning : session.title
+        session.detail ?? session.phase.meaning
     }
 }

@@ -10,6 +10,44 @@ SPEC.loader.exec_module(HOOK)
 
 
 class HookTransportTests(unittest.TestCase):
+    def test_current_prompt_survives_tool_lifecycle_events(self):
+        self.assertEqual(
+            HOOK.detail_for("UserPromptSubmit", {"prompt": "修复登录\n流程"}),
+            "修复登录 流程",
+        )
+        self.assertIsNone(
+            HOOK.detail_for("PreToolUse", {"tool_name": "Bash"}),
+        )
+        self.assertEqual(
+            HOOK.title_for(
+                "UserPromptSubmit",
+                {"user_prompt": "优化会话内容展示"},
+                "AgentPulse",
+            ),
+            "优化会话内容展示",
+        )
+        self.assertIsNone(
+            HOOK.title_for(
+                "PreToolUse",
+                {"tool_name": "Bash", "title": "AgentPulse"},
+                "AgentPulse",
+            )
+        )
+        self.assertEqual(
+            HOOK.title_for(
+                "agent-turn-complete",
+                {"input-messages": ["优化", "会话展示"]},
+                "AgentPulse",
+            ),
+            "优化 会话展示",
+        )
+
+    def test_session_content_is_shortened(self):
+        self.assertEqual(
+            HOOK.concise_content("一" * 81),
+            "一" * 77 + "...",
+        )
+
     def test_interrupted_tool_call_pauses_session(self):
         self.assertEqual(
             HOOK.phase_for(
