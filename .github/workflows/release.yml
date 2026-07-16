@@ -112,6 +112,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: >-
           gh release upload $env:GITHUB_REF_NAME
-          dist/velopack-win-x64/*-Setup.exe
-          dist/velopack-win-x64/*-Portable.zip
+          dist/release-win-x64/AgentPulse-Windows-Setup.exe
+          dist/release-win-x64/AgentPulse-Windows-Portable.zip
           --clobber
