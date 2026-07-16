@@ -32,7 +32,17 @@ struct NotchView: View {
         }
         .foregroundStyle(.white)
         .background(Color.black)
-        .clipShape(RoundedRectangle(cornerRadius: expanded ? 18 : 14, style: .continuous))
+        .clipShape(
+            UnevenRoundedRectangle(
+                cornerRadii: .init(
+                    topLeading: 0,
+                    bottomLeading: expanded ? 18 : 12,
+                    bottomTrailing: expanded ? 18 : 12,
+                    topTrailing: 0
+                ),
+                style: .continuous
+            )
+        )
         .contentShape(Rectangle())
         .animation(.easeInOut(duration: 0.18), value: expanded)
         .onHover { hovering in
