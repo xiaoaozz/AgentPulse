@@ -18,17 +18,11 @@ struct SettingsView: View {
                     .font(.system(.caption, design: .monospaced))
                     .textSelection(.enabled)
             }
-            Section("软件更新") {
+            Section("版本") {
                 LabeledContent("当前版本", value: model.currentVersion)
-                Button("检查更新…") {
-                    model.checkForUpdates()
-                }
-                .disabled(!model.canCheckForUpdates)
-                if !model.canCheckForUpdates {
-                    Text("源码运行版本未配置更新源。正式安装包会自动检查更新。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text("新版本请前往 GitHub Releases 手动下载安装。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

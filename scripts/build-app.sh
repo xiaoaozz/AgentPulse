@@ -26,7 +26,7 @@ done
 
 mkdir -p "${DIST_DIR}"
 rm -rf "${APP_PATH}"
-rm -f "${ZIP_PATH}" "${ZIP_PATH}.sha256"
+rm -f "${ZIP_PATH}"
 
 echo "Building AgentPulse ${VERSION} (${ARCHS})"
 swift build --package-path "${ROOT_DIR}" -c release "${arch_args[@]}"
@@ -40,24 +40,6 @@ install -m 755 "${ROOT_DIR}/scripts/agentpulse-hook.py" "${APP_PATH}/Contents/Re
 
 plutil -replace CFBundleShortVersionString -string "${VERSION}" "${APP_PATH}/Contents/Info.plist"
 plutil -replace CFBundleVersion -string "${BUILD_NUMBER}" "${APP_PATH}/Contents/Info.plist"
-
-SPARKLE_FRAMEWORK="${BIN_DIR}/Sparkle.framework"
-if [[ ! -d "${SPARKLE_FRAMEWORK}" ]]; then
-    echo "Sparkle.framework was not produced by SwiftPM" >&2
-    exit 1
-fi
-mkdir -p "${APP_PATH}/Contents/Frameworks"
-ditto "${SPARKLE_FRAMEWORK}" "${APP_PATH}/Contents/Frameworks/Sparkle.framework"
-
-if [[ -n "${SPARKLE_PUBLIC_KEY:-}" ]]; then
-    plutil -insert SUFeedURL -string \
-        "https://github.com/xiaoaozz/AgentPulse/releases/latest/download/appcast.xml" \
-        "${APP_PATH}/Contents/Info.plist"
-    plutil -insert SUPublicEDKey -string "${SPARKLE_PUBLIC_KEY}" "${APP_PATH}/Contents/Info.plist"
-else
-    plutil -remove SUEnableAutomaticChecks "${APP_PATH}/Contents/Info.plist"
-    plutil -remove SUAllowsAutomaticUpdates "${APP_PATH}/Contents/Info.plist"
-fi
 
 ICON_WORK_DIR="$(mktemp -d "${DIST_DIR}/AgentPulse-icons.XXXXXX")"
 ICONSET_DIR="${ICON_WORK_DIR}/AgentPulse.iconset"
@@ -87,22 +69,9 @@ iconutil -c icns "${ICONSET_DIR}" -o "${APP_PATH}/Contents/Resources/AppIcon.icn
 
 if [[ -n "${SIGN_IDENTITY:-}" ]]; then
     echo "Signing with Developer ID identity"
-    codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" \
-        "${APP_PATH}/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc"
-    codesign --force --options runtime --timestamp --preserve-metadata=entitlements --sign "${SIGN_IDENTITY}" \
-        "${APP_PATH}/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc"
-    codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" \
-        "${APP_PATH}/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate"
-    codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" \
-        "${APP_PATH}/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app"
-    codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" \
-        "${APP_PATH}/Contents/Frameworks/Sparkle.framework"
     codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" "${APP_PATH}"
 else
     echo "No SIGN_IDENTITY configured; applying an ad-hoc signature"
-    # Hardened Runtime library validation requires a real shared Team ID.
-    # Ad-hoc builds have none, so enabling it would prevent the executable
-    # from loading the embedded Sparkle framework.
     codesign --force --deep --sign - "${APP_PATH}"
 fi
 
@@ -128,11 +97,6 @@ elif [[ -n "${SIGN_IDENTITY:-}" && -n "${NOTARY_KEY_PATH:-}" && -n "${NOTARY_KEY
     xcrun stapler staple "${APP_PATH}"
     create_zip
 fi
-
-(
-    cd "${DIST_DIR}"
-    shasum -a 256 "$(basename "${ZIP_PATH}")" > "$(basename "${ZIP_PATH}").sha256"
-)
 
 codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
 echo "Created ${ZIP_PATH}"

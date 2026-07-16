@@ -14,11 +14,11 @@ public sealed partial class MainWindow : Window
     public SessionRepository Repository { get; }
     public IntPtr WindowHandle { get; }
 
-    public MainWindow(SessionRepository repository, UpdateService updateService, Action exit)
+    public MainWindow(SessionRepository repository, Action exit)
     {
         Repository = repository;
         InitializeComponent();
-        Content = new SessionPanelView(repository, updateService, JumpToSession, exit);
+        Content = new SessionPanelView(repository, JumpToSession, exit);
 
         WindowHandle = WindowNative.GetWindowHandle(this);
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(WindowHandle);

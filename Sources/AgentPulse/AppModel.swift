@@ -2,28 +2,16 @@ import AgentPulseCore
 import AppKit
 import Combine
 import Foundation
-import Sparkle
 
 @MainActor
 final class AppModel: ObservableObject {
     let repository = SessionRepository()
     @Published var useAttentionColor = true
-    private let updaterController: SPUStandardUpdaterController?
     private var server: SocketServer?
     private var notchPanel: NotchPanelController?
     private var subscriptions: Set<AnyCancellable> = []
 
     init() {
-        if Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil {
-            updaterController = SPUStandardUpdaterController(
-                startingUpdater: true,
-                updaterDelegate: nil,
-                userDriverDelegate: nil
-            )
-        } else {
-            updaterController = nil
-        }
-
         let repository = repository
         repository.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -44,8 +32,6 @@ final class AppModel: ObservableObject {
             self.notchPanel = NotchPanelController(
                 repository: repository,
                 onJump: { session in TerminalNavigator.jump(to: session) },
-                canCheckForUpdates: self.canCheckForUpdates,
-                onCheckForUpdates: { [weak self] in self?.checkForUpdates() },
                 onQuit: { NSApplication.shared.terminate(nil) }
             )
         }
@@ -59,11 +45,4 @@ final class AppModel: ObservableObject {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "开发版"
     }
 
-    var canCheckForUpdates: Bool {
-        updaterController != nil
-    }
-
-    func checkForUpdates() {
-        updaterController?.checkForUpdates(nil)
-    }
 }
