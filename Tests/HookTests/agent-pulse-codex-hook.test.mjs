@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -6,10 +9,19 @@ import {
   conciseContent,
   endpointForPlatform,
   eventPayload,
+  latestAssistantMessageFromTranscript,
   phaseFor,
   projectNameForPath,
   terminalProcessName,
+  transcriptActionForLine,
 } from "../../scripts/agent-pulse-codex-hook.mjs";
+
+function transcriptFile(entries) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "agentpulse-transcript-"));
+  const file = path.join(directory, "session.jsonl");
+  fs.writeFileSync(file, `${entries.map(JSON.stringify).join("\n")}\n`);
+  return file;
+}
 
 test("session content is flattened and shortened for the list", () => {
   assert.equal(conciseContent("  修复登录\n流程  "), "修复登录 流程");
@@ -35,6 +47,62 @@ test("the current prompt survives tool lifecycle events", () => {
   assert.equal(prompt.title, "请帮我修复 会话列表显示");
   assert.equal(tool.detail, null);
   assert.equal(tool.title, null);
+});
+
+test("tool lifecycle events show the latest GPT reply from the current transcript turn", () => {
+  const transcriptPath = transcriptFile([
+    { type: "event_msg", payload: { type: "user_message", message: "修复动态展示" } },
+    { type: "event_msg", payload: {
+      type: "agent_message",
+      phase: "commentary",
+      message: "我已经定位到更新链路，正在修改适配器。",
+    } },
+  ]);
+  const payload = eventPayload({
+    hook_event_name: "PreToolUse",
+    session_id: "live-transcript",
+    cwd: "/tmp/AgentPulse",
+    transcript_path: transcriptPath,
+    tool_name: "Bash",
+  });
+
+  assert.equal(payload.title, null);
+  assert.equal(payload.detail, "我已经定位到更新链路，正在修改适配器。");
+});
+
+test("a new turn never reuses the preceding turn's GPT reply", () => {
+  const transcriptPath = transcriptFile([
+    { type: "event_msg", payload: { type: "agent_message", message: "上一轮回答" } },
+    { type: "event_msg", payload: { type: "user_message", message: "新问题" } },
+  ]);
+
+  assert.equal(latestAssistantMessageFromTranscript(transcriptPath), null);
+  assert.equal(eventPayload({
+    hook_event_name: "PreToolUse",
+    session_id: "new-turn",
+    cwd: "/tmp/AgentPulse",
+    transcript_path: transcriptPath,
+  }).detail, null);
+});
+
+test("assistant response items are supported as a transcript fallback", () => {
+  const transcriptPath = transcriptFile([
+    { type: "response_item", payload: {
+      type: "message",
+      role: "user",
+      content: [{ type: "input_text", text: "检查状态" }],
+    } },
+    { type: "response_item", payload: {
+      type: "message",
+      role: "assistant",
+      content: [{ type: "output_text", text: "正在检查会话状态。" }],
+    } },
+  ]);
+
+  assert.equal(
+    latestAssistantMessageFromTranscript(transcriptPath),
+    "正在检查会话状态。",
+  );
 });
 
 test("Codex notify input messages become the session title", () => {
@@ -129,6 +197,66 @@ test("an interrupted app-server turn pauses the matching session", () => {
 
   assert.equal(payload.phase, "paused");
   assert.equal(payload.session_id, "thread-interrupted");
+});
+
+test("an app-server interrupt request immediately pauses the matching session", () => {
+  const payload = eventPayload({
+    method: "turn/interrupt",
+    params: {
+      threadId: "thread-interrupt-request",
+      turnId: "turn-1",
+    },
+  }, "/tmp/AgentPulse");
+
+  assert.equal(payload.phase, "paused");
+  assert.equal(payload.session_id, "thread-interrupt-request");
+});
+
+test("a transcript turn_aborted record pauses a lifecycle-hook session", () => {
+  assert.deepEqual(transcriptActionForLine(JSON.stringify({
+    timestamp: "2026-07-16T11:12:55.447Z",
+    type: "event_msg",
+    payload: { type: "turn_aborted" },
+  })), {
+    phase: "paused",
+    detail: "已由用户中止",
+    occurredAt: "2026-07-16T11:12:55.447Z",
+  });
+  assert.deepEqual(transcriptActionForLine(JSON.stringify({
+    type: "event_msg",
+    payload: { type: "task_complete" },
+  })), { stop: true });
+  assert.equal(transcriptActionForLine("not json"), null);
+});
+
+test("each completed app-server GPT message refreshes session detail without changing its title", () => {
+  const payload = eventPayload({
+    method: "item/completed",
+    params: {
+      threadId: "thread-live-reply",
+      item: {
+        type: "agentMessage",
+        id: "message-1",
+        phase: "commentary",
+        text: "我已经定位到状态更新链路，接下来补充测试。",
+      },
+    },
+  }, "/tmp/AgentPulse");
+
+  assert.equal(payload.phase, "running");
+  assert.equal(payload.session_id, "thread-live-reply");
+  assert.equal(payload.title, null);
+  assert.equal(payload.detail, "我已经定位到状态更新链路，接下来补充测试。");
+});
+
+test("non-message app-server items do not overwrite session content", () => {
+  assert.equal(eventPayload({
+    method: "item/completed",
+    params: {
+      threadId: "thread-tool",
+      item: { type: "commandExecution", id: "command-1" },
+    },
+  }, "/tmp/AgentPulse"), null);
 });
 
 test("a failed app-server turn is a failed session", () => {

@@ -15,7 +15,7 @@ public enum SessionPhase: String, Codable, CaseIterable, Sendable {
     public var isActive: Bool { self == .preparing || self == .running }
     public var isClearable: Bool { self == .done || self == .warning || self == .failed }
     public var isOngoing: Bool {
-        isActive || needsAttention || self == .paused
+        isActive || needsAttention
     }
 
     public var label: String {

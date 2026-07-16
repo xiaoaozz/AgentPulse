@@ -24,7 +24,7 @@ public static class SessionPhaseExtensions
         phase is SessionPhase.Done or SessionPhase.Warning or SessionPhase.Failed;
 
     public static bool IsOngoing(this SessionPhase phase) =>
-        phase.IsActive() || phase.NeedsAttention() || phase == SessionPhase.Paused;
+        phase.IsActive() || phase.NeedsAttention();
 
     public static string Label(this SessionPhase phase) => phase switch
     {

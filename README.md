@@ -98,7 +98,7 @@ AgentPulse 通过 Hook 接收 Agent 生命周期事件。Release 安装包已经
 node /Applications/AgentPulse.app/Contents/Resources/Scripts/agent-pulse-codex-hook.mjs
 ```
 
-Windows 请将路径替换为 AgentPulse 安装目录下的 `Scripts/agent-pulse-codex-hook.mjs`。推荐监听 `SessionStart`、`UserPromptSubmit`、`PreToolUse`、`PostToolUse`、`PermissionRequest` 和 `Stop`，以获得完整状态变化。
+Windows 请将路径替换为 AgentPulse 安装目录下的 `Scripts/agent-pulse-codex-hook.mjs`。推荐监听 `SessionStart`、`UserPromptSubmit`、`PreToolUse`、`PostToolUse`、`PermissionRequest` 和 `Stop`，以获得完整状态变化。工具事件会从本轮 transcript 提取最新 GPT 阶段回复并更新会话详情，标题保持不变。
 
 ### Claude Code 或其他 Agent
 
@@ -186,7 +186,7 @@ AgentPulse/
 
 ## 隐私与设计边界
 
-- 不读取 Agent transcript 或完整对话内容。
+- Codex Hook 仅按需读取 transcript 尾部来提取本轮最新 GPT 回复，不保存或上传完整对话。
 - 不上传事件或会话信息，所有通信均在本机完成。
 - 不批准、拒绝或修改 Agent 的权限请求。
 - 不保证定位到具体终端标签页或 Codex 任务，仅负责激活来源应用。

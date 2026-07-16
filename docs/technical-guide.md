@@ -243,7 +243,9 @@ node /Applications/AgentPulse.app/Contents/Resources/Scripts/agent-pulse-codex-h
 | `PermissionRequest` | `waiting_for_action`（人工审批）或 `running`（替我审批） |
 | `Stop` | `done` |
 
-适配器接收到 Codex App Server 的 `turn/completed` 通知 JSON 时也能正确转换：`interrupted` 映射为 `paused`，`failed` 映射为 `failed`，其余完成状态映射为 `done`。这样即使工具调用期间中断，会话也不会继续停留在 `running`。
+生命周期 Hook 的工具事件会通过 `transcript_path` 读取本轮最新 GPT 回复，并在保持会话标题不变的前提下更新详情。因此 GPT 给出阶段说明并继续调用工具时，用户不必等到整轮结束就能看到最新进度。`UserPromptSubmit` 后还会从当时的文件末尾监视本轮 transcript；Codex 写入 `turn_aborted` 时立即发送 `paused`，正常完成或监视超过 24 小时后自动退出。这补足了生命周期 Hook 没有“用户中止”事件的问题。读取以本轮用户消息为边界；如果 transcript 不存在或格式无法识别，适配器会保留已有详情且不阻断 Codex。
+
+适配器也能转换由外部桥接器主动转发的 Codex App Server 事件：`turn/interrupt` 会立即把对应会话标记为 `paused`；每个 `item/completed` 的 `agentMessage` 会更新详情；`turn/completed` 中的 `failed` 映射为 `failed`，其余完成状态映射为 `done`。AgentPulse 不会旁路订阅其他客户端现有的 App Server 连接，因此常规 Hooks 接入的动态详情来自上述 transcript 路径。
 
 ### 审批者模式
 
@@ -373,7 +375,7 @@ node scripts/agent-pulse-codex-hook.mjs --source MyAgent
 | `done` | Done | `#22C55E` | 执行完成 | 否 | 是 |
 | `warning` | Warning | `#F97316` | 已完成，但存在警告或异常 | 否 | 是 |
 | `failed` | Failed | `#DC2626` | 执行失败 | 否 | 是 |
-| `paused` | Paused | `#8B5CF6` | 已暂停 | 是 | 否 |
+| `paused` | Paused | `#8B5CF6` | 已暂停或已由用户中止 | 否 | 否 |
 | `offline` | Offline | `#4B5563` | Agent 离线 | 否 | 否 |
 
 主会话列表排序优先级为：等待操作 → 执行中/准备中 → 暂停 → 空闲 → 完成/警告/失败 → 离线。同一优先级内，最近更新的会话排在前面。刘海展开区域独立按最近使用时间倒序展示，最多显示 5 条会话。
@@ -477,5 +479,5 @@ rm /tmp/agentpulse.sock
 
 - AgentPulse 不批准、拒绝或修改任何 Agent 权限请求。
 - AgentPulse 不向 Hook 返回业务决策；Codex `Stop` Hook 仅输出空 JSON 以正常确认事件。
-- AgentPulse 不发送系统通知，不读取会话 transcript，也不把事件上传到网络。
+- AgentPulse 不发送系统通知，也不把事件上传到网络；Codex Hook 仅按需读取 transcript 尾部来提取本轮最新 GPT 回复，不保存完整对话。
 - 当前没有会话持久化、开机自启、应用内更新或 DMG 打包能力；macOS 正式版本支持签名与公证。

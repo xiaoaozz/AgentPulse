@@ -16,6 +16,11 @@ def transport_endpoint(platform=sys.platform, env=os.environ):
 
 
 def phase_for(event, data):
+    # App Server clients emit this request immediately when a turn is
+    # cancelled. Some bridges do not also forward the final notification.
+    if event == "turn/interrupt":
+        return "paused"
+
     status = (
         data.get("status")
         or (data.get("turn") or {}).get("status")
@@ -42,6 +47,9 @@ def phase_for(event, data):
         return "paused"
     if event == "turn/completed":
         return "failed" if status == "failed" else "done"
+    if event == "item/completed":
+        item = (data.get("params") or {}).get("item") or {}
+        return "running" if item.get("type") == "agentMessage" else None
     if event == "SessionStart":
         return "idle"
     if event == "UserPromptSubmit":
@@ -126,9 +134,65 @@ def title_for(event, data, project_name):
     return None
 
 
+def _transcript_assistant_text(entry):
+    payload = entry.get("payload") or {}
+    if entry.get("type") == "event_msg" and payload.get("type") == "agent_message":
+        return payload.get("message")
+    if (
+        entry.get("type") == "response_item"
+        and payload.get("type") == "message"
+        and payload.get("role") == "assistant"
+    ):
+        return " ".join(
+            item.get("text", "")
+            for item in payload.get("content") or []
+            if item.get("type") == "output_text" and isinstance(item.get("text"), str)
+        )
+    return None
+
+
+def _is_transcript_user_message(entry):
+    payload = entry.get("payload") or {}
+    return (
+        entry.get("type") == "event_msg" and payload.get("type") == "user_message"
+    ) or (
+        entry.get("type") == "response_item"
+        and payload.get("type") == "message"
+        and payload.get("role") == "user"
+    )
+
+
+def latest_assistant_message_from_transcript(path):
+    if not isinstance(path, str) or not path.strip():
+        return None
+    try:
+        with open(path, "rb") as transcript:
+            transcript.seek(0, os.SEEK_END)
+            size = transcript.tell()
+            transcript.seek(max(0, size - 1024 * 1024))
+            lines = transcript.read().decode("utf-8", errors="ignore").splitlines()
+        for line in reversed(lines):
+            try:
+                entry = json.loads(line)
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if _is_transcript_user_message(entry):
+                return None
+            message = _transcript_assistant_text(entry)
+            if message:
+                return concise_content(message)
+    except OSError:
+        pass
+    return None
+
+
 def detail_for(event, data):
     if event == "UserPromptSubmit":
         return prompt_content(data)
+    if event == "item/completed":
+        item = (data.get("params") or {}).get("item") or {}
+        if item.get("type") == "agentMessage":
+            return concise_content(item.get("text"))
     if event == "PermissionRequest":
         return concise_content(
             data.get("message")
@@ -136,9 +200,15 @@ def detail_for(event, data):
         )
 
     # Do not replace the current turn summary with a tool name such as "Bash".
+    transcript_message = (
+        latest_assistant_message_from_transcript(data.get("transcript_path"))
+        if event in ("PreToolUse", "PostToolUse", "PreCompact")
+        else None
+    )
     return concise_content(
         data.get("last_assistant_message")
         or data.get("assistant_message")
+        or transcript_message
         or data.get("error")
         or (
             ((data.get("params") or {}).get("turn") or {}).get("error") or {}

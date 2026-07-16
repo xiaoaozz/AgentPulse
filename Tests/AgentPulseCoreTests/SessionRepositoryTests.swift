@@ -58,6 +58,18 @@ final class SessionRepositoryTests: XCTestCase {
         XCTAssertEqual(repository.ongoingCount, 1)
     }
 
+    func testInterruptedSessionRemainsVisibleButLeavesOngoingCount() {
+        let repository = SessionRepository()
+        repository.receive(.init(sessionId: "interrupted", agent: "Codex", cwd: "/tmp/A", phase: .running))
+        XCTAssertEqual(repository.ongoingCount, 1)
+
+        repository.receive(.init(sessionId: "interrupted", agent: "Codex", cwd: "/tmp/A", phase: .paused))
+
+        XCTAssertEqual(repository.sessions.map(\.id), ["interrupted"])
+        XCTAssertEqual(repository.sessions.first?.phase, .paused)
+        XCTAssertEqual(repository.ongoingCount, 0)
+    }
+
     func testMissingDetailKeepsLastAgentSummary() {
         let repository = SessionRepository()
         repository.receive(.init(sessionId: "a", agent: "Custom", cwd: "/tmp/A", phase: .running, detail: "正在分析代码"))

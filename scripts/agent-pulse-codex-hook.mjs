@@ -9,6 +9,8 @@
  * permission decisions.
  */
 
+import fs from "node:fs";
+import { spawn } from "node:child_process";
 import net from "node:net";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
@@ -22,6 +24,7 @@ const socketPath = endpointForPlatform();
 const sourceIndex = process.argv.indexOf("--source");
 const agent = sourceIndex >= 0 ? process.argv[sourceIndex + 1] || "Codex" : "Codex";
 const approvalReviewer = approvalReviewerForArgs(process.argv, process.env);
+const transcriptWatcherFlag = "--watch-transcript";
 
 export function approvalReviewerForArgs(args, env = {}) {
   const index = args.indexOf("--approval-reviewer");
@@ -54,6 +57,13 @@ function wasInterrupted(data) {
 }
 
 export function phaseFor(event, reviewer = "user", data = {}) {
+  // App Server clients emit this request as soon as the user cancels a turn.
+  // Handle it directly instead of relying only on the later turn/completed
+  // notification, which an event bridge may not forward.
+  if (event === "turn/interrupt") {
+    return "paused";
+  }
+
   const interruptibleEvents = [
     "PostToolUse",
     "PostToolUseFailure",
@@ -73,6 +83,8 @@ export function phaseFor(event, reviewer = "user", data = {}) {
     case "PreToolUse":
     case "PostToolUse":
       return "running";
+    case "item/completed":
+      return data.params?.item?.type === "agentMessage" ? "running" : null;
     case "PermissionRequest":
       return reviewer === "auto_review" ? "running" : "waiting_for_action";
     case "Stop":
@@ -114,6 +126,66 @@ export function projectNameForPath(cwd) {
   return cwd.split(/[\\/]/).filter(Boolean).at(-1) || cwd;
 }
 
+function transcriptAssistantText(entry) {
+  if (entry?.type === "event_msg" && entry.payload?.type === "agent_message") {
+    return entry.payload.message;
+  }
+
+  if (entry?.type === "response_item" &&
+      entry.payload?.type === "message" &&
+      entry.payload?.role === "assistant") {
+    return entry.payload.content
+      ?.filter((item) => item?.type === "output_text")
+      .map((item) => item.text)
+      .filter((item) => typeof item === "string")
+      .join(" ");
+  }
+
+  return null;
+}
+
+function isTranscriptUserMessage(entry) {
+  return (entry?.type === "event_msg" && entry.payload?.type === "user_message") ||
+    (entry?.type === "response_item" &&
+      entry.payload?.type === "message" &&
+      entry.payload?.role === "user");
+}
+
+export function latestAssistantMessageFromTranscript(path) {
+  if (typeof path !== "string" || !path.trim()) return null;
+
+  try {
+    // Only inspect the tail. Hook invocations must remain fast even for long
+    // sessions, and the latest user/assistant entries are appended to JSONL.
+    const descriptor = fs.openSync(path, "r");
+    try {
+      const size = fs.fstatSync(descriptor).size;
+      const length = Math.min(size, 1024 * 1024);
+      const buffer = Buffer.alloc(length);
+      fs.readSync(descriptor, buffer, 0, length, size - length);
+      const lines = buffer.toString("utf8").split(/\r?\n/);
+
+      for (let index = lines.length - 1; index >= 0; index -= 1) {
+        if (!lines[index].trim()) continue;
+        let entry;
+        try { entry = JSON.parse(lines[index]); }
+        catch { continue; }
+
+        // Do not leak the previous turn's answer into a new turn that has not
+        // emitted any assistant text yet.
+        if (isTranscriptUserMessage(entry)) return null;
+        const message = transcriptAssistantText(entry);
+        if (message) return conciseContent(message);
+      }
+    } finally {
+      fs.closeSync(descriptor);
+    }
+  } catch {
+    // Transcript access is best-effort and must never break Codex hooks.
+  }
+  return null;
+}
+
 function detailFor(event, payload, reviewer) {
   if (event === "PermissionRequest" && reviewer === "auto_review") {
     return conciseContent(payload.tool_name
@@ -125,6 +197,10 @@ function detailFor(event, payload, reviewer) {
     return promptContent(payload);
   }
 
+  if (event === "item/completed" && payload.params?.item?.type === "agentMessage") {
+    return conciseContent(payload.params.item.text);
+  }
+
   if (event === "PermissionRequest") {
     return conciseContent(payload.message || (
       payload.tool_name ? `等待确认：${payload.tool_name}` : "等待用户确认"
@@ -133,11 +209,17 @@ function detailFor(event, payload, reviewer) {
 
   // Tool lifecycle payloads commonly only contain `tool_name`. Treating that
   // as session content replaces the user's prompt with values such as "Bash".
-  // Returning no detail lets the repository retain the current turn summary.
+  // Codex does append assistant commentary to its transcript before invoking
+  // the next tool hook, so use that text to refresh the visible session stage.
+  const transcriptMessage = ["PreToolUse", "PostToolUse", "PreCompact"]
+    .includes(event)
+    ? latestAssistantMessageFromTranscript(payload.transcript_path)
+    : null;
   return conciseContent(
     payload.last_assistant_message ||
     payload["last-assistant-message"] ||
     payload.assistant_message ||
+    transcriptMessage ||
     payload.error ||
     payload.params?.turn?.error?.message ||
     payload.tool_error ||
@@ -189,6 +271,129 @@ export function conciseContent(value, maxLength = 80) {
     : `${characters.slice(0, maxLength - 3).join("")}...`;
 }
 
+export function transcriptActionForLine(line) {
+  let record;
+  try {
+    record = JSON.parse(line);
+  } catch {
+    return null;
+  }
+
+  if (record?.type !== "event_msg") return null;
+  if (record.payload?.type === "turn_aborted") {
+    return {
+      phase: "paused",
+      detail: "已由用户中止",
+      occurredAt: record.timestamp,
+    };
+  }
+  if (record.payload?.type === "task_complete") return { stop: true };
+  return null;
+}
+
+function argumentValue(name, args = process.argv) {
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : null;
+}
+
+function sessionIdFor(data) {
+  return data.session_id ||
+    data.params?.threadId ||
+    data.thread_id ||
+    data["thread-id"] ||
+    data.conversation_id ||
+    "unknown";
+}
+
+function startTranscriptWatcher(data, fallbackCwd) {
+  const transcriptPath = data.transcript_path;
+  if (!transcriptPath || !process.argv[1]) return;
+
+  let startOffset = 0;
+  try {
+    startOffset = fs.statSync(transcriptPath).size;
+  } catch {
+    // The transcript may be created just after the prompt hook fires.
+  }
+
+  const child = spawn(process.execPath, [
+    process.argv[1],
+    transcriptWatcherFlag,
+    transcriptPath,
+    "--start-offset",
+    String(startOffset),
+    "--session-id",
+    sessionIdFor(data),
+    "--cwd",
+    data.cwd || fallbackCwd,
+    "--source",
+    agent,
+  ], {
+    detached: true,
+    stdio: "ignore",
+    env: process.env,
+  });
+  child.unref();
+}
+
+async function watchTranscript() {
+  const transcriptPath = argumentValue(transcriptWatcherFlag);
+  const sessionId = argumentValue("--session-id") || "unknown";
+  const cwd = argumentValue("--cwd") || process.cwd();
+  let position = Number(argumentValue("--start-offset")) || 0;
+  let remainder = "";
+  const deadline = Date.now() + 24 * 60 * 60 * 1000;
+
+  while (Date.now() < deadline) {
+    try {
+      const info = await fs.promises.stat(transcriptPath);
+      if (info.size < position) {
+        position = 0;
+        remainder = "";
+      }
+
+      if (info.size > position) {
+        const handle = await fs.promises.open(transcriptPath, "r");
+        try {
+          while (position < info.size) {
+            const length = Math.min(info.size - position, 256 * 1024);
+            const buffer = Buffer.alloc(length);
+            const { bytesRead } = await handle.read(buffer, 0, length, position);
+            if (!bytesRead) break;
+            position += bytesRead;
+            remainder += buffer.subarray(0, bytesRead).toString("utf8");
+
+            const lines = remainder.split("\n");
+            remainder = lines.pop() || "";
+            for (const line of lines) {
+              const action = transcriptActionForLine(line);
+              if (action?.stop) return;
+              if (action?.phase === "paused") {
+                await send({
+                  session_id: sessionId,
+                  agent: agent === "codex" ? "Codex" : agent,
+                  cwd,
+                  title: null,
+                  phase: action.phase,
+                  detail: action.detail,
+                  occurred_at: action.occurredAt || new Date().toISOString(),
+                });
+                return;
+              }
+            }
+          }
+        } finally {
+          await handle.close();
+        }
+      }
+    } catch {
+      // Missing or temporarily unavailable transcripts are retried quietly.
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+}
+
 export function eventPayload(
   data,
   fallbackCwd = process.cwd(),
@@ -201,13 +406,7 @@ export function eventPayload(
   if (!phase) return null;
 
   const cwd = data.cwd || fallbackCwd;
-  const sessionId =
-    data.session_id ||
-    data.params?.threadId ||
-    data.thread_id ||
-    data["thread-id"] ||
-    data.conversation_id ||
-    "unknown";
+  const sessionId = sessionIdFor(data);
   const projectName = projectNameForPath(cwd);
 
   return {
@@ -240,6 +439,11 @@ function send(payload) {
 }
 
 async function main() {
+  if (process.argv.includes(transcriptWatcherFlag)) {
+    await watchTranscript();
+    return;
+  }
+
   let input = "";
   process.stdin.setEncoding("utf8");
   for await (const chunk of process.stdin) input += chunk;
@@ -253,6 +457,10 @@ async function main() {
   const data = JSON.parse(encoded);
   const payload = eventPayload(data);
   if (!payload) return;
+
+  if (data.hook_event_name === "UserPromptSubmit") {
+    startTranscriptWatcher(data, payload.cwd);
+  }
 
   await send(payload);
 
