@@ -6,6 +6,6 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../AgentPulse.Windows.Core/AgentPulse.Windows.Core.csproj" />
+    <ProjectReference Include="../../Sources/AgentPulse.Windows.Core/AgentPulse.Windows.Core.csproj" />
   </ItemGroup>
 </Project>

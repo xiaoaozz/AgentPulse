@@ -3,8 +3,22 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
-import {
+function findRepositoryPath(...segments) {
+  let current = path.dirname(fileURLToPath(import.meta.url));
+  while (true) {
+    const candidate = path.join(current, ...segments);
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(current);
+    if (parent === current) {
+      throw new Error(`Could not locate ${path.join(...segments)} from ${import.meta.url}`);
+    }
+    current = parent;
+  }
+}
+
+const {
   approvalReviewerForArgs,
   conciseContent,
   endpointForPlatform,
@@ -14,7 +28,7 @@ import {
   projectNameForPath,
   terminalProcessName,
   transcriptActionForLine,
-} from "../../scripts/agent-pulse-codex-hook.mjs";
+} = await import(findRepositoryPath("scripts", "agent-pulse-codex-hook.mjs"));
 
 function transcriptFile(entries) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "agentpulse-transcript-"));

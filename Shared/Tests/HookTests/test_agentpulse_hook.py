@@ -6,7 +6,19 @@ import unittest
 from datetime import datetime, timezone
 
 
-SCRIPT = pathlib.Path(__file__).parents[2] / "scripts" / "agentpulse-hook.py"
+def find_repository_path(*segments: str) -> pathlib.Path:
+    current = pathlib.Path(__file__).resolve().parent
+    while True:
+        candidate = current.joinpath(*segments)
+        if candidate.exists():
+            return candidate
+        if current.parent == current:
+            joined = "/".join(segments)
+            raise FileNotFoundError(f"Could not locate {joined} from {__file__}")
+        current = current.parent
+
+
+SCRIPT = find_repository_path("scripts", "agentpulse-hook.py")
 SPEC = importlib.util.spec_from_file_location("agentpulse_hook", SCRIPT)
 HOOK = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(HOOK)

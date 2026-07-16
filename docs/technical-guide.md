@@ -412,13 +412,18 @@ node scripts/agent-pulse-codex-hook.mjs --source MyAgent
 
 ```text
 AgentPulse/
-├── Sources/AgentPulse/             # 刘海面板、设置与应用跳转
-├── Sources/AgentPulseCore/         # 事件模型、解码、会话仓库与 Socket 服务
-├── Protocol/                       # 跨平台 JSON Schema 与行为 Fixtures
-├── Windows/                        # WinUI 3 客户端、C# 核心与契约测试
+├── Platforms/
+│   ├── macOS/
+│   │   ├── Sources/AgentPulse/     # 刘海面板、设置与应用跳转
+│   │   ├── Sources/AgentPulseCore/ # 事件模型、解码、会话仓库与 Socket 服务
+│   │   └── Tests/AgentPulseCoreTests/
+│   └── Windows/
+│       ├── Sources/                # WinUI 3 客户端与 C# 核心
+│       └── Tests/AgentPulse.Windows.ContractTests/
+├── Shared/
+│   ├── Protocol/                   # 跨平台 JSON Schema 与行为 Fixtures
+│   └── Tests/HookTests/            # Node.js / Python Hook 测试
 ├── scripts/                        # Codex/Claude 风格 Hook 适配器
-├── Tests/AgentPulseCoreTests/      # Swift Core 单元与 Socket 测试
-├── Tests/HookTests/                # Node.js Hook 映射测试
 └── Package.swift
 ```
 
@@ -440,20 +445,20 @@ swift test
 运行 Node.js Hook 测试：
 
 ```bash
-node --test Tests/HookTests/agent-pulse-codex-hook.test.mjs
+node --test Shared/Tests/HookTests/agent-pulse-codex-hook.test.mjs
 ```
 
 运行 Python Hook 测试：
 
 ```bash
-python3 -m unittest discover -s Tests/HookTests -p 'test_*.py'
+python3 -m unittest discover -s Shared/Tests/HookTests -p 'test_*.py'
 ```
 
 在 Windows 上运行共享协议测试与构建：
 
 ```powershell
-dotnet run --project Windows/AgentPulse.Windows.ContractTests -- Protocol/Fixtures/session-scenarios.json
-dotnet build Windows/AgentPulse.Windows/AgentPulse.Windows.csproj -c Release -p:Platform=x64
+dotnet run --project Platforms/Windows/Tests/AgentPulse.Windows.ContractTests -- Shared/Protocol/Fixtures/session-scenarios.json
+dotnet build Platforms/Windows/Sources/AgentPulse.Windows/AgentPulse.Windows.csproj -c Release -p:Platform=x64
 ```
 
 测试覆盖事件时间解析、会话更新与排序、结果清理、Socket 延迟写入，以及 Codex Hook 的主要事件映射。

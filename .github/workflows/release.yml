@@ -24,8 +24,8 @@ jobs:
       - name: Run tests
         run: |
           swift test
-          node --test Tests/HookTests/*.test.mjs
-          python3 -m unittest discover -s Tests/HookTests -p 'test_*.py'
+          node --test Shared/Tests/HookTests/*.test.mjs
+          python3 -m unittest discover -s Shared/Tests/HookTests -p 'test_*.py'
 
       - name: Validate signing configuration
         run: |
@@ -93,9 +93,9 @@ jobs:
       - name: Run shared protocol contract tests
         run: >-
           dotnet run
-          --project Windows/AgentPulse.Windows.ContractTests/AgentPulse.Windows.ContractTests.csproj
+          --project Platforms/Windows/Tests/AgentPulse.Windows.ContractTests/AgentPulse.Windows.ContractTests.csproj
           --configuration Release
-          -- Protocol/Fixtures/session-scenarios.json
+          -- Shared/Protocol/Fixtures/session-scenarios.json
       - name: Build Windows release
         shell: pwsh
         env:

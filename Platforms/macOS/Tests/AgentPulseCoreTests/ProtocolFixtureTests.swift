@@ -5,11 +5,7 @@ import XCTest
 @MainActor
 final class ProtocolFixtureTests: XCTestCase {
     func testSharedSessionScenarios() throws {
-        let fixtureURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Protocol/Fixtures/session-scenarios.json")
+        let fixtureURL = try sharedFixtureURL()
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let fixture = try decoder.decode(ProtocolFixture.self, from: Data(contentsOf: fixtureURL))
@@ -39,6 +35,26 @@ final class ProtocolFixtureTests: XCTestCase {
                 scenario.name
             )
         }
+    }
+}
+
+private func sharedFixtureURL() throws -> URL {
+    let expectedRelativePath = "Shared/Protocol/Fixtures/session-scenarios.json"
+    var searchURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    while true {
+        let candidate = searchURL.appendingPathComponent(expectedRelativePath)
+        if FileManager.default.fileExists(atPath: candidate.path) {
+            return candidate
+        }
+        let parent = searchURL.deletingLastPathComponent()
+        if parent.path == searchURL.path {
+            throw NSError(
+                domain: "ProtocolFixtureTests",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Could not locate \(expectedRelativePath) from \(#filePath)"]
+            )
+        }
+        searchURL = parent
     }
 }
 

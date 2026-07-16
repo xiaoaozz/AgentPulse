@@ -15,10 +15,7 @@ var transportTests = new Func<Task>[]
     ConnectedIdleClientDoesNotBlockDisposalAsync,
 };
 
-var fixturePath = args.FirstOrDefault() ?? Path.Combine(
-    AppContext.BaseDirectory,
-    "..", "..", "..", "..", "..",
-    "Protocol", "Fixtures", "session-scenarios.json");
+var fixturePath = args.FirstOrDefault() ?? FindSharedFixturePath();
 var fixture = JsonSerializer.Deserialize<ProtocolFixture>(File.ReadAllText(fixturePath))
     ?? throw new InvalidOperationException("Could not decode shared AgentPulse protocol fixtures.");
 AssertEqual(1, fixture.ProtocolVersion, "protocol version");
@@ -207,6 +204,20 @@ static async Task WaitAsync(Task task, string context)
 }
 
 static string UniquePipeName() => $"agentpulse-test-{Guid.NewGuid():N}";
+
+static string FindSharedFixturePath()
+{
+    const string relativePath = "Shared/Protocol/Fixtures/session-scenarios.json";
+    var directory = new DirectoryInfo(AppContext.BaseDirectory);
+    while (directory is not null)
+    {
+        var candidate = Path.Combine(directory.FullName, relativePath);
+        if (File.Exists(candidate)) return candidate;
+        directory = directory.Parent;
+    }
+
+    throw new FileNotFoundException($"Could not locate {relativePath} from {AppContext.BaseDirectory}");
+}
 
 static void AssertEqual<T>(T expected, T actual, string context) where T : notnull
 {
