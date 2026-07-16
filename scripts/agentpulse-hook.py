@@ -51,7 +51,7 @@ def phase_for(event, data):
         item = (data.get("params") or {}).get("item") or {}
         return "running" if item.get("type") == "agentMessage" else None
     if event == "SessionStart":
-        return "idle"
+        return "ready"
     if event == "UserPromptSubmit":
         return "preparing"
     if event in ("PreToolUse", "PostToolUse"):

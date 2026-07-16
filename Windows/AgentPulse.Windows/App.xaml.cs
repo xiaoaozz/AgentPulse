@@ -1,4 +1,5 @@
 using AgentPulse.Windows.Core.Services;
+using AgentPulse.Windows.Core.Models;
 using Microsoft.UI.Xaml;
 using Velopack;
 
@@ -11,6 +12,7 @@ public partial class App : Application
     private MainWindow? _window;
     private TrayIcon? _trayIcon;
     private NamedPipeEventServer? _server;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _statusTimer;
     private bool _isExiting;
 
     public App()
@@ -35,9 +37,12 @@ public partial class App : Application
             _window.WindowHandle,
             _window.DispatcherQueue,
             _window.TogglePanel,
-            "AgentPulse · 等待 Agent 会话");
-        repository.PropertyChanged += (_, _) =>
-            _trayIcon?.UpdateTooltip($"AgentPulse · {repository.OngoingCount} 个进行中会话");
+            "AgentPulse · Ready");
+        repository.PropertyChanged += (_, _) => UpdateTrayTooltip(repository);
+        _statusTimer = _window.DispatcherQueue.CreateTimer();
+        _statusTimer.Interval = TimeSpan.FromSeconds(1);
+        _statusTimer.Tick += (_, _) => UpdateTrayTooltip(repository);
+        _statusTimer.Start();
 
         _server = new NamedPipeEventServer(value =>
         {
@@ -46,10 +51,21 @@ public partial class App : Application
         _server.Start();
     }
 
+    private void UpdateTrayTooltip(SessionRepository repository)
+    {
+        var text = repository.GlobalPhase == SessionPhase.Done
+            ? "AgentPulse · Done"
+            : repository.OngoingCount == 0
+                ? "AgentPulse · Ready"
+                : $"AgentPulse · {repository.OngoingCount} 个进行中会话";
+        _trayIcon?.UpdateTooltip(text);
+    }
+
     private async void ExitAsync()
     {
         if (_isExiting) return;
         _isExiting = true;
+        _statusTimer?.Stop();
         _trayIcon?.Dispose();
         if (_ownsMutex) _singleInstance.ReleaseMutex();
         if (_server is not null) await _server.DisposeAsync();

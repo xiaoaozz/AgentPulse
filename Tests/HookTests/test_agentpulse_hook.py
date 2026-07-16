@@ -12,6 +12,9 @@ SPEC.loader.exec_module(HOOK)
 
 
 class HookTransportTests(unittest.TestCase):
+    def test_session_start_reports_ready(self):
+        self.assertEqual(HOOK.phase_for("SessionStart", {}), "ready")
+
     def transcript_file(self, entries):
         file = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False)
         with file:

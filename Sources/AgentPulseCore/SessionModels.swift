@@ -1,7 +1,7 @@
 import Foundation
 
 public enum SessionPhase: String, Codable, CaseIterable, Sendable {
-    case idle
+    case ready
     case preparing
     case running
     case waitingForAction = "waiting_for_action"
@@ -13,14 +13,14 @@ public enum SessionPhase: String, Codable, CaseIterable, Sendable {
 
     public var needsAttention: Bool { self == .waitingForAction }
     public var isActive: Bool { self == .preparing || self == .running }
-    public var isClearable: Bool { self == .done || self == .warning || self == .failed }
+    public var isClearable: Bool { self == .done || self == .warning || self == .failed || self == .paused }
     public var isOngoing: Bool {
         isActive || needsAttention
     }
 
     public var label: String {
         switch self {
-        case .idle: "Idle"
+        case .ready: "Ready"
         case .preparing: "Preparing"
         case .running: "Running"
         case .waitingForAction: "Waiting for Action"
@@ -34,14 +34,14 @@ public enum SessionPhase: String, Codable, CaseIterable, Sendable {
 
     public var meaning: String {
         switch self {
-        case .idle: "空闲，无任务"
+        case .ready: "工具已就绪，无任务执行"
         case .preparing: "初始化、准备执行"
         case .running: "正在执行任务"
         case .waitingForAction: "等待用户操作"
         case .done: "执行完成"
         case .warning: "已完成，但存在警告或异常"
         case .failed: "执行失败"
-        case .paused: "已暂停"
+        case .paused: "已中止"
         case .offline: "Agent 离线"
         }
     }

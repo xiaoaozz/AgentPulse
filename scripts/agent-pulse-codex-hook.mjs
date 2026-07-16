@@ -77,7 +77,7 @@ export function phaseFor(event, reviewer = "user", data = {}) {
 
   switch (event) {
     case "SessionStart":
-      return "idle";
+      return "ready";
     case "UserPromptSubmit":
       return "preparing";
     case "PreToolUse":

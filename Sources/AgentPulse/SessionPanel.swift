@@ -71,7 +71,7 @@ struct SessionPanel: View {
 
     private var footer: some View {
         HStack {
-            Button("一键清理结果 (\(repository.clearableCount))") { repository.clearCompleted() }
+            Button("一键清理终态 (\(repository.clearableCount))") { repository.clearCompleted() }
                 .buttonStyle(.plain).foregroundStyle(.secondary)
                 .disabled(repository.clearableCount == 0)
             Spacer()

@@ -25,6 +25,34 @@ final class SessionRepositoryTests: XCTestCase {
         XCTAssertTrue(repository.sessions.isEmpty)
     }
 
+    func testDoneIsShownGloballyForFiveSecondsThenReturnsToReady() {
+        let repository = SessionRepository()
+        let completedAt = Date(timeIntervalSince1970: 1_000)
+        repository.receive(
+            .init(sessionId: "done", agent: "Codex", cwd: "/tmp/A", phase: .done),
+            now: completedAt
+        )
+
+        XCTAssertEqual(repository.globalPhase(at: completedAt), .done)
+        XCTAssertEqual(repository.globalPhase(at: completedAt.addingTimeInterval(4.999)), .done)
+        XCTAssertEqual(repository.globalPhase(at: completedAt.addingTimeInterval(5)), .ready)
+    }
+
+    func testNewEventReplacesTransientDoneGlobalState() {
+        let repository = SessionRepository()
+        let completedAt = Date(timeIntervalSince1970: 1_000)
+        repository.receive(
+            .init(sessionId: "done", agent: "Codex", cwd: "/tmp/A", phase: .done),
+            now: completedAt
+        )
+        repository.receive(
+            .init(sessionId: "new", agent: "Codex", cwd: "/tmp/B", phase: .ready),
+            now: completedAt.addingTimeInterval(1)
+        )
+
+        XCTAssertEqual(repository.globalPhase(at: completedAt.addingTimeInterval(2)), .ready)
+    }
+
     func testRemovingOneCompletedSessionDoesNotRemoveActiveSessions() {
         let repository = SessionRepository()
         repository.receive(.init(sessionId: "running", agent: "Custom", cwd: "/tmp/A", phase: .running))
@@ -48,9 +76,9 @@ final class SessionRepositoryTests: XCTestCase {
         XCTAssertEqual(repository.ongoingCount, 1)
     }
 
-    func testIdleAndOfflineSessionsDoNotContributeToOngoingCount() {
+    func testReadyAndOfflineSessionsDoNotContributeToOngoingCount() {
         let repository = SessionRepository()
-        repository.receive(.init(sessionId: "idle", agent: "Codex", cwd: "/tmp/A", phase: .idle))
+        repository.receive(.init(sessionId: "ready", agent: "Codex", cwd: "/tmp/A", phase: .ready))
         repository.receive(.init(sessionId: "offline", agent: "Codex", cwd: "/tmp/B", phase: .offline))
         repository.receive(.init(sessionId: "waiting", agent: "Codex", cwd: "/tmp/C", phase: .waitingForAction))
 
@@ -68,6 +96,38 @@ final class SessionRepositoryTests: XCTestCase {
         XCTAssertEqual(repository.sessions.map(\.id), ["interrupted"])
         XCTAssertEqual(repository.sessions.first?.phase, .paused)
         XCTAssertEqual(repository.ongoingCount, 0)
+        XCTAssertEqual(repository.globalPhase, .ready)
+    }
+
+    func testGlobalPhaseIgnoresPausedSessionWhenOtherWorkNeedsAttention() {
+        let repository = SessionRepository()
+        repository.receive(.init(sessionId: "interrupted", agent: "Codex", cwd: "/tmp/A", phase: .paused))
+        repository.receive(.init(sessionId: "running", agent: "Codex", cwd: "/tmp/B", phase: .running))
+        repository.receive(.init(sessionId: "waiting", agent: "Codex", cwd: "/tmp/C", phase: .waitingForAction))
+
+        XCTAssertEqual(repository.globalPhase, .waitingForAction)
+    }
+
+    func testClearedInterruptedSessionIsRecreatedByNextTaskInSameConversation() {
+        let repository = SessionRepository()
+        repository.receive(.init(sessionId: "same-conversation", agent: "Codex", cwd: "/tmp/A", phase: .paused))
+
+        XCTAssertEqual(repository.clearableCount, 1)
+        repository.removeCompletedSession(id: "same-conversation")
+        XCTAssertTrue(repository.sessions.isEmpty)
+
+        repository.receive(.init(
+            sessionId: "same-conversation",
+            agent: "Codex",
+            cwd: "/tmp/A",
+            title: "继续执行新任务",
+            phase: .preparing
+        ))
+
+        XCTAssertEqual(repository.sessions.count, 1)
+        XCTAssertEqual(repository.sessions.first?.title, "继续执行新任务")
+        XCTAssertEqual(repository.sessions.first?.phase, .preparing)
+        XCTAssertEqual(repository.ongoingCount, 1)
     }
 
     func testMissingDetailKeepsLastAgentSummary() {

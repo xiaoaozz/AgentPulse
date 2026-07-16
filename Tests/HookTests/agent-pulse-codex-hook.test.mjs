@@ -285,7 +285,8 @@ test("Codex notify payload uses its hyphenated fields", () => {
   assert.equal(payload.detail, "Finished from notify");
 });
 
-test("unsupported events cannot overwrite a session as idle", () => {
+test("SessionStart reports ready and unsupported events cannot overwrite it", () => {
+  assert.equal(phaseFor("SessionStart"), "ready");
   assert.equal(phaseFor("UnknownEvent"), null);
   assert.equal(phaseFor("UnknownEvent", "user", { status: "interrupted" }), null);
   assert.equal(eventPayload({ hook_event_name: "UnknownEvent" }), null);

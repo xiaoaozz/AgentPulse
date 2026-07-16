@@ -3,6 +3,7 @@ import Foundation
 
 @MainActor
 public final class SessionRepository: ObservableObject {
+    public static let doneDisplayDuration: TimeInterval = 5
     @Published public private(set) var sessions: [AgentSession] = []
     @Published public private(set) var lastError: String?
 
@@ -14,6 +15,22 @@ public final class SessionRepository: ObservableObject {
     /// Count shown in the menu bar and notch. Terminal result sessions remain
     /// visible in the list, but do not contribute to the live session count.
     public var ongoingCount: Int { sessions.count { $0.phase.isOngoing } }
+    /// Status shown by the collapsed global surface. Historical states such as
+    /// Terminal results remain visible per session, but do not keep the
+    /// whole app in that state when no work is currently ongoing.
+    public var globalPhase: SessionPhase { globalPhase(at: .now) }
+
+    public func globalPhase(at now: Date) -> SessionPhase {
+        if let ongoing = sessions.first(where: { $0.phase.needsAttention || $0.phase.isActive }) {
+            return ongoing.phase
+        }
+
+        guard let latest = sessions.max(by: { $0.updatedAt < $1.updatedAt }), latest.phase == .done else {
+            return .ready
+        }
+        let elapsed = now.timeIntervalSince(latest.updatedAt)
+        return elapsed >= 0 && elapsed < Self.doneDisplayDuration ? .done : .ready
+    }
 
     public func receive(_ event: AgentEvent, now: Date = .now) {
         if let index = sessions.firstIndex(where: { $0.id == event.sessionId }) {
@@ -47,9 +64,8 @@ public final class SessionRepository: ObservableObject {
     private func priority(_ phase: SessionPhase) -> Int {
         if phase.needsAttention { return 0 }
         if phase.isActive { return 1 }
-        if phase == .paused { return 2 }
-        if phase == .idle { return 3 }
-        if phase.isClearable { return 4 }
+        if phase == .ready { return 2 }
+        if phase.isClearable { return 3 }
         return 5
     }
 }

@@ -12,7 +12,7 @@
     "phase": {
       "type": "string",
       "enum": [
-        "idle",
+        "ready",
         "preparing",
         "running",
         "waiting_for_action",

@@ -2,7 +2,7 @@ namespace AgentPulse.Windows.Core.Models;
 
 public enum SessionPhase
 {
-    Idle,
+    Ready,
     Preparing,
     Running,
     WaitingForAction,
@@ -21,14 +21,14 @@ public static class SessionPhaseExtensions
         phase is SessionPhase.Preparing or SessionPhase.Running;
 
     public static bool IsClearable(this SessionPhase phase) =>
-        phase is SessionPhase.Done or SessionPhase.Warning or SessionPhase.Failed;
+        phase is SessionPhase.Done or SessionPhase.Warning or SessionPhase.Failed or SessionPhase.Paused;
 
     public static bool IsOngoing(this SessionPhase phase) =>
         phase.IsActive() || phase.NeedsAttention();
 
     public static string Label(this SessionPhase phase) => phase switch
     {
-        SessionPhase.Idle => "Idle",
+        SessionPhase.Ready => "Ready",
         SessionPhase.Preparing => "Preparing",
         SessionPhase.Running => "Running",
         SessionPhase.WaitingForAction => "Waiting for Action",
@@ -42,7 +42,7 @@ public static class SessionPhaseExtensions
 
     public static SessionPhase FromProtocolValue(string value) => value switch
     {
-        "idle" => SessionPhase.Idle,
+        "ready" => SessionPhase.Ready,
         "preparing" => SessionPhase.Preparing,
         "running" => SessionPhase.Running,
         "waiting_for_action" => SessionPhase.WaitingForAction,

@@ -73,10 +73,11 @@ struct NotchView: View {
     }
 
     private var collapsedContent: some View {
-        HStack(spacing: 0) {
-            Text(statusText)
+        TimelineView(.periodic(from: .now, by: 0.25)) { context in
+            HStack(spacing: 0) {
+            Text(statusText(at: context.date))
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(primaryPhase.displayColor)
+                .foregroundStyle(primaryPhase(at: context.date).displayColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.9)
                 .frame(width: 92, alignment: .trailing)
@@ -92,6 +93,7 @@ struct NotchView: View {
                     .monospacedDigit()
             }
             .frame(width: 92, alignment: .leading)
+            }
         }
         .padding(.horizontal, 12)
     }
@@ -102,13 +104,13 @@ struct NotchView: View {
             Button {
                 repository.clearCompleted()
             } label: {
-                Label("清除已完成", systemImage: "trash")
+                Label("清除终态", systemImage: "trash")
                     .font(.system(size: 10, weight: .medium))
             }
             .buttonStyle(.plain)
             .foregroundStyle(.white.opacity(repository.clearableCount > 0 ? 0.68 : 0.28))
             .disabled(repository.clearableCount == 0)
-            .help("清除所有已完成、警告和失败的会话")
+            .help("清除所有已中止、已完成、警告和失败的会话")
         }
         .padding(.horizontal, 14)
         .frame(height: 34)
@@ -193,8 +195,8 @@ struct NotchView: View {
         }
     }
 
-    private var primaryPhase: SessionPhase {
-        repository.sessions.first?.phase ?? .idle
+    private func primaryPhase(at date: Date) -> SessionPhase {
+        repository.globalPhase(at: date)
     }
 
     private var recentSessions: [AgentSession] {
@@ -209,8 +211,8 @@ struct NotchView: View {
         return max(150, right.minX - left.maxX)
     }
 
-    private var statusText: String {
-        switch primaryPhase {
+    private func statusText(at date: Date) -> String {
+        switch primaryPhase(at: date) {
         case .preparing: "Preparing..."
         case .running: "Running..."
         case .waitingForAction: "Action"
@@ -219,7 +221,7 @@ struct NotchView: View {
         case .failed: "Failed"
         case .paused: "Paused"
         case .offline: "Offline"
-        case .idle: "Idle"
+        case .ready: "Ready"
         }
     }
 

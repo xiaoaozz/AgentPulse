@@ -73,9 +73,9 @@
       ],
       "expected_order": ["interrupted"],
       "expected_ongoing_count": 0,
-      "expected_clearable_count": 0,
-      "remove_ids": [],
-      "expected_order_after_removals": ["interrupted"]
+      "expected_clearable_count": 1,
+      "remove_ids": ["interrupted"],
+      "expected_order_after_removals": []
     }
   ]
 }

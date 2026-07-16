@@ -7,12 +7,28 @@ namespace AgentPulse.Windows.Core.Services;
 
 public sealed class SessionRepository : INotifyPropertyChanged
 {
+    public static readonly TimeSpan DoneDisplayDuration = TimeSpan.FromSeconds(5);
     public ObservableCollection<AgentSession> Sessions { get; } = [];
 
     public int AttentionCount => Sessions.Count(session => session.Phase.NeedsAttention());
     public int OngoingCount => Sessions.Count(session => session.Phase.IsOngoing());
     public int ClearableCount => Sessions.Count(session => session.Phase.IsClearable());
     public bool HasClearable => ClearableCount > 0;
+    public SessionPhase GlobalPhase => GlobalPhaseAt(DateTimeOffset.UtcNow);
+
+    public SessionPhase GlobalPhaseAt(DateTimeOffset now)
+    {
+        var ongoing = Sessions.FirstOrDefault(session =>
+            session.Phase.NeedsAttention() || session.Phase.IsActive());
+        if (ongoing is not null) return ongoing.Phase;
+
+        var latest = Sessions.MaxBy(session => session.UpdatedAt);
+        if (latest?.Phase != SessionPhase.Done) return SessionPhase.Ready;
+        var elapsed = now - latest.UpdatedAt;
+        return elapsed >= TimeSpan.Zero && elapsed < DoneDisplayDuration
+            ? SessionPhase.Done
+            : SessionPhase.Ready;
+    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -58,15 +74,15 @@ public sealed class SessionRepository : INotifyPropertyChanged
         OnPropertyChanged(nameof(OngoingCount));
         OnPropertyChanged(nameof(ClearableCount));
         OnPropertyChanged(nameof(HasClearable));
+        OnPropertyChanged(nameof(GlobalPhase));
     }
 
     private static int Priority(SessionPhase phase)
     {
         if (phase.NeedsAttention()) return 0;
         if (phase.IsActive()) return 1;
-        if (phase == SessionPhase.Paused) return 2;
-        if (phase == SessionPhase.Idle) return 3;
-        if (phase.IsClearable()) return 4;
+        if (phase == SessionPhase.Ready) return 2;
+        if (phase.IsClearable()) return 3;
         return 5;
     }
 

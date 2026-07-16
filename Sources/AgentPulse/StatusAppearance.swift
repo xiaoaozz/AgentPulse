@@ -4,7 +4,7 @@ import SwiftUI
 extension SessionPhase {
     var displayColor: Color {
         switch self {
-        case .idle: Color(hex: 0x9CA3AF)
+        case .ready: Color(hex: 0x22C55E)
         case .preparing: Color(hex: 0x3B82F6)
         case .running: Color(hex: 0xF59E0B)
         case .waitingForAction: Color(hex: 0xEF4444)
