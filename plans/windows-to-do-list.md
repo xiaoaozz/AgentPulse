@@ -20,7 +20,7 @@ The repository now contains Windows-specific behavior changes in the session con
 **In scope**:
 - Running the existing Windows contract-test executable
 - Running the Windows app build
-- Recording pass/fail results back into `plans/README.md`
+- Recording pass/fail results directly in this file
 
 **Out of scope**:
 - New feature work
@@ -44,7 +44,7 @@ dotnet build Platforms/Windows/Sources/AgentPulse.Windows/AgentPulse.Windows.csp
 
 - [ ] Windows contract tests pass.
 - [ ] Windows app build passes.
-- [ ] `plans/README.md` is updated from `TODO` to `DONE`, or `BLOCKED` with a one-line reason if the environment/setup is unavailable.
+- [ ] This file is updated with `DONE`, or `BLOCKED` with a one-line reason if the environment/setup is unavailable.
 
 ## Notes
 
