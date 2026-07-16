@@ -22,6 +22,15 @@ final class ProtocolFixtureTests: XCTestCase {
             XCTAssertEqual(repository.sessions.map(\.id), scenario.expectedOrder, scenario.name)
             XCTAssertEqual(repository.ongoingCount, scenario.expectedOngoingCount, scenario.name)
             XCTAssertEqual(repository.clearableCount, scenario.expectedClearableCount, scenario.name)
+            if let expectedPhases = scenario.expectedPhases {
+                for (id, phase) in expectedPhases {
+                    XCTAssertEqual(
+                        repository.sessions.first(where: { $0.id == id })?.phase.rawValue,
+                        phase,
+                        "\(scenario.name): \(id) phase"
+                    )
+                }
+            }
 
             scenario.removeIds.forEach { repository.removeCompletedSession(id: $0) }
             XCTAssertEqual(
@@ -47,6 +56,7 @@ private struct SessionScenario: Decodable {
     let name: String
     let events: [AgentEvent]
     let expectedOrder: [String]
+    let expectedPhases: [String: String]?
     let expectedOngoingCount: Int
     let expectedClearableCount: Int
     let removeIds: [String]
@@ -55,6 +65,7 @@ private struct SessionScenario: Decodable {
     enum CodingKeys: String, CodingKey {
         case name, events
         case expectedOrder = "expected_order"
+        case expectedPhases = "expected_phases"
         case expectedOngoingCount = "expected_ongoing_count"
         case expectedClearableCount = "expected_clearable_count"
         case removeIds = "remove_ids"

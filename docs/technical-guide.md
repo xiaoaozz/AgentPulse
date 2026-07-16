@@ -110,7 +110,7 @@ scripts/build-app.sh
 
 ### GitHub Release
 
-推送 `v*` 标签会触发 [`.github/workflows/release.yml`](../.github/workflows/release.yml)，运行全部测试、构建 Universal App 并创建 GitHub Release：
+推送 `v*` 标签会触发 [`.github/workflows/release.yml`](../.github/workflows/release.yml)，运行全部测试、分别构建 macOS 与 Windows 包，并且只会在两个平台产物都准备完成后统一创建或更新 GitHub Release：
 
 ```bash
 git tag v0.1.0
@@ -314,7 +314,7 @@ python3 /Applications/AgentPulse.app/Contents/Resources/Scripts/agentpulse-hook.
 python3 /absolute/path/to/AgentPulse/scripts/agentpulse-hook.py
 ```
 
-适配器不会修改 `~/.claude`、`~/.codex` 或其他 Agent 配置，请根据实际客户端支持的事件，将命令合并到现有 Hook 设置中。未知事件会被忽略，避免错误地覆盖当前会话状态。
+适配器不会修改 `~/.claude`、`~/.codex` 或其他 Agent 配置，请根据实际客户端支持的事件，将命令合并到现有 Hook 设置中。未知事件会被忽略，避免错误地覆盖当前会话状态。Python 适配器会把 transcript 路径中包含 `.codex` 目录组件的会话识别为 `Codex`；其他路径继续回退到 `AGENTPULSE_AGENT`，默认值为 `Agent`。
 
 ### 适配器环境变量
 
@@ -332,7 +332,7 @@ node scripts/agent-pulse-codex-hook.mjs --source MyAgent
 
 ## 通用事件协议
 
-每次连接发送一个 UTF-8 JSON 对象，发送完成后关闭连接。服务端以连接结束作为消息结束标记，因此不要在同一次连接中连续发送多个对象。
+每次连接发送一个 UTF-8 JSON 对象，发送完成后关闭连接。服务端以连接结束作为消息结束标记，因此不要在同一次连接中连续发送多个对象。单条消息的 UTF-8 编码长度上限为 64 KiB，且发送方需要在 1 秒内写完并关闭连接；超限或超时的连接会被拒绝，但不会停止后续监听。
 
 ```json
 {
@@ -362,7 +362,7 @@ node scripts/agent-pulse-codex-hook.mjs --source MyAgent
 | `pid` | 否 | integer | 来源应用的进程 ID，用于点击会话时激活应用 |
 | `tty` | 否 | string | 来源 TTY；当前仅存储，尚未用于窗口定位 |
 | `terminal_bundle_id` | 否 | string | macOS 应用 bundle identifier，跳转时优先使用 |
-| `occurred_at` | 否 | string | 带或不带小数秒的 ISO 8601 时间；省略时使用服务端接收时间 |
+| `occurred_at` | 否 | string | 带或不带小数秒的 ISO 8601 时间；较旧事件会被忽略；相同时间戳按到达顺序覆盖；省略时使用服务端接收时间 |
 
 ### 状态
 
@@ -378,7 +378,7 @@ node scripts/agent-pulse-codex-hook.mjs --source MyAgent
 | `paused` | Paused | `#8B5CF6` | 任务已由用户中止 | 否 | 是 |
 | `offline` | Offline | `#4B5563` | Agent 离线 | 否 | 否 |
 
-主会话列表排序优先级为：等待操作 → 执行中/准备中 → 暂停 → 空闲 → 完成/警告/失败 → 离线。同一优先级内，最近更新的会话排在前面。刘海展开区域独立按最近使用时间倒序展示，最多显示 5 条会话。
+主会话列表排序优先级为：等待操作 → 执行中/准备中 → 暂停 → 空闲 → 完成/警告/失败 → 离线。同一优先级内，最近更新的会话排在前面。对同一 `session_id`，如果新事件的 `occurred_at` 严格早于当前记录的 `updatedAt`，该事件会被整体忽略；相同时间戳继续按到达顺序生效。刘海展开区域独立按最近使用时间倒序展示，最多显示 5 条会话。
 
 刘海折叠状态和 Windows 托盘只反映当前仍在进行的工作：优先显示待操作，其次显示准备中或运行中；如果只剩中止、完成、失败、就绪或离线会话，全局状态恢复为初始 `Ready`/“等待 Agent 会话”。这些终态仍保留在展开后的单条会话中，并可单独删除或一键清理。清除 `paused` 后，如果用户在原 Codex 会话继续提交请求，新的 `UserPromptSubmit` 事件会以同一会话 ID 创建一条全新的任务记录。
 
@@ -400,6 +400,13 @@ node scripts/agent-pulse-codex-hook.mjs --source MyAgent
 - 每条会话都可以独立点击并尝试激活其来源应用；会话数量变化时，展开面板会同步调整高度。
 - 没有会话时只显示“等待 Agent 会话”，不展示额外的品牌标题。
 - 应用默认不显示 macOS 菜单栏或 Dock 图标；展开刘海面板后可点击右下角电源图标安全退出。
+
+## 传输限制与恢复
+
+- Unix Domain Socket 和 Windows Named Pipe 都要求一条连接只承载一个 UTF-8 JSON 对象。
+- 编码后的消息大小上限为 64 KiB；超过上限会报错并丢弃该连接，不会产生部分 `AgentEvent`。
+- 发送方需要在一秒内完成写入并关闭连接；连接闲置超时会报错并被关闭。
+- 单次坏连接不会让监听器退出，后续合法连接仍会继续被接收。
 
 ## 项目结构
 

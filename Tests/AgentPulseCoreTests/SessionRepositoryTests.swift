@@ -136,4 +136,56 @@ final class SessionRepositoryTests: XCTestCase {
         repository.receive(.init(sessionId: "a", agent: "Custom", cwd: "/tmp/A", phase: .done))
         XCTAssertEqual(repository.sessions.first?.detail, "正在分析代码")
     }
+
+    func testOlderEventCannotRollSessionBackward() {
+        let repository = SessionRepository()
+        let newer = Date(timeIntervalSince1970: 200)
+        let older = Date(timeIntervalSince1970: 100)
+
+        repository.receive(.init(
+            sessionId: "a",
+            agent: "Codex",
+            cwd: "/tmp/A",
+            title: "Newest",
+            phase: .done,
+            detail: "finished",
+            occurredAt: newer
+        ))
+        repository.receive(.init(
+            sessionId: "a",
+            agent: "Codex",
+            cwd: "/tmp/A",
+            title: "Older",
+            phase: .running,
+            detail: "stale",
+            occurredAt: older
+        ))
+
+        XCTAssertEqual(repository.sessions.first?.phase, .done)
+        XCTAssertEqual(repository.sessions.first?.title, "Newest")
+        XCTAssertEqual(repository.sessions.first?.detail, "finished")
+        XCTAssertEqual(repository.ongoingCount, 0)
+    }
+
+    func testEqualTimestampEventStillAppliesInArrivalOrder() {
+        let repository = SessionRepository()
+        let timestamp = Date(timeIntervalSince1970: 300)
+
+        repository.receive(.init(sessionId: "a", agent: "Codex", cwd: "/tmp/A", phase: .running, occurredAt: timestamp))
+        repository.receive(.init(sessionId: "a", agent: "Codex", cwd: "/tmp/A", phase: .done, occurredAt: timestamp))
+
+        XCTAssertEqual(repository.sessions.first?.phase, .done)
+        XCTAssertEqual(repository.ongoingCount, 0)
+    }
+
+    func testMissingTimestampUsesReceiveTimeAndStillApplies() {
+        let repository = SessionRepository()
+        let receivedAt = Date(timeIntervalSince1970: 400)
+
+        repository.receive(.init(sessionId: "a", agent: "Codex", cwd: "/tmp/A", phase: .running), now: receivedAt)
+
+        XCTAssertEqual(repository.sessions.first?.phase, .running)
+        XCTAssertEqual(repository.sessions.first?.updatedAt, receivedAt)
+        XCTAssertEqual(repository.ongoingCount, 1)
+    }
 }

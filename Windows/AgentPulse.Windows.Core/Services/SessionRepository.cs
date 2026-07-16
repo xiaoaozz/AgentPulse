@@ -34,10 +34,12 @@ public sealed class SessionRepository : INotifyPropertyChanged
 
     public void Receive(AgentEvent value, DateTimeOffset? now = null)
     {
+        var candidateTime = value.OccurredAt ?? now ?? DateTimeOffset.UtcNow;
         var current = Sessions.FirstOrDefault(session => session.Id == value.SessionId);
+        if (current is not null && candidateTime < current.UpdatedAt) return;
         var updated = current is null
-            ? AgentSession.FromEvent(value, now)
-            : current.Applying(value, now);
+            ? AgentSession.FromEvent(value, candidateTime)
+            : current.Applying(value, candidateTime);
         var sorted = Sessions
             .Where(session => session.Id != value.SessionId)
             .Append(updated)

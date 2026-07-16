@@ -1,4 +1,5 @@
 using System.IO.Pipes;
+using System.Text;
 using System.Text.Json;
 using AgentPulse.Windows.Core.Models;
 
@@ -7,6 +8,8 @@ namespace AgentPulse.Windows.Core.Services;
 public sealed class NamedPipeEventServer : IAsyncDisposable
 {
     public const string DefaultPipeName = "agentpulse";
+    public const int MaxMessageBytes = 64 * 1024;
+    private static readonly TimeSpan ConnectionTimeout = TimeSpan.FromSeconds(1);
 
     private readonly string _pipeName;
     private readonly Action<AgentEvent> _onEvent;
@@ -39,10 +42,7 @@ public sealed class NamedPipeEventServer : IAsyncDisposable
                     PipeTransmissionMode.Byte,
                     PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
                 await pipe.WaitForConnectionAsync(cancellationToken);
-                using var reader = new StreamReader(pipe);
-                var encoded = await reader.ReadToEndAsync(cancellationToken);
-                if (string.IsNullOrWhiteSpace(encoded)) continue;
-                var value = JsonSerializer.Deserialize<AgentEvent>(encoded);
+                var value = await ReadEventAsync(pipe, cancellationToken);
                 if (value is not null) _onEvent(value);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -54,6 +54,43 @@ public sealed class NamedPipeEventServer : IAsyncDisposable
                 _onError(error);
             }
         }
+    }
+
+    private static async Task<AgentEvent?> ReadEventAsync(
+        NamedPipeServerStream pipe,
+        CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(ConnectionTimeout);
+
+        using var buffer = new MemoryStream();
+        var chunk = new byte[8_192];
+        while (true)
+        {
+            int read;
+            try
+            {
+                read = await pipe.ReadAsync(chunk, timeout.Token);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+            {
+                throw new TimeoutException("Named pipe client did not finish sending within one second.");
+            }
+
+            if (read == 0) break;
+            if (buffer.Length + read > MaxMessageBytes)
+                throw new InvalidDataException($"Named pipe payload exceeds {MaxMessageBytes} bytes.");
+            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken);
+        }
+
+        if (buffer.Length == 0) return null;
+        var encoded = Encoding.UTF8.GetString(buffer.ToArray());
+        if (string.IsNullOrWhiteSpace(encoded)) return null;
+        return JsonSerializer.Deserialize<AgentEvent>(encoded);
     }
 
     public async ValueTask DisposeAsync()

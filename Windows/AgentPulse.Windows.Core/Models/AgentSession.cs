@@ -18,7 +18,7 @@ public sealed class AgentSession
     public string Headline => Title;
     public string Subtitle => string.IsNullOrWhiteSpace(Detail) ? PhaseLabel : Detail;
 
-    public static AgentSession FromEvent(AgentEvent value, DateTimeOffset? now = null) => new()
+    public static AgentSession FromEvent(AgentEvent value, DateTimeOffset updatedAt) => new()
     {
         Id = value.SessionId,
         Agent = value.Agent,
@@ -29,10 +29,10 @@ public sealed class AgentSession
         ProcessId = value.ProcessId,
         Tty = value.Tty,
         TerminalProcess = value.TerminalProcess,
-        UpdatedAt = value.OccurredAt ?? now ?? DateTimeOffset.UtcNow,
+        UpdatedAt = updatedAt,
     };
 
-    public AgentSession Applying(AgentEvent value, DateTimeOffset? now = null) => new()
+    public AgentSession Applying(AgentEvent value, DateTimeOffset updatedAt) => new()
     {
         Id = Id,
         Agent = value.Agent,
@@ -43,7 +43,7 @@ public sealed class AgentSession
         ProcessId = value.ProcessId ?? ProcessId,
         Tty = value.Tty ?? Tty,
         TerminalProcess = value.TerminalProcess ?? TerminalProcess,
-        UpdatedAt = value.OccurredAt ?? now ?? DateTimeOffset.UtcNow,
+        UpdatedAt = updatedAt,
     };
 
     private static string? NonBlank(string? value) =>

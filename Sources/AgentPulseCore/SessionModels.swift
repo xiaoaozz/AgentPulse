@@ -117,10 +117,12 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
         pid = event.pid
         tty = event.tty
         terminalBundleId = event.terminalBundleId
-        updatedAt = event.occurredAt ?? now
+        updatedAt = now
     }
 
-    public mutating func apply(_ event: AgentEvent, now: Date = .now) {
+    @discardableResult
+    public mutating func apply(_ event: AgentEvent, at candidateTime: Date) -> Bool {
+        guard candidateTime >= updatedAt else { return false }
         agent = event.agent
         cwd = event.cwd
         if let title = event.title?.nilIfBlank { self.title = title }
@@ -129,7 +131,8 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
         pid = event.pid ?? pid
         tty = event.tty ?? tty
         terminalBundleId = event.terminalBundleId ?? terminalBundleId
-        updatedAt = event.occurredAt ?? now
+        updatedAt = candidateTime
+        return true
     }
 }
 

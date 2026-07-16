@@ -76,6 +76,64 @@
       "expected_clearable_count": 1,
       "remove_ids": ["interrupted"],
       "expected_order_after_removals": []
+    },
+    {
+      "name": "stale session events are ignored while equal and missing timestamps still apply",
+      "events": [
+        {
+          "session_id": "stale-done",
+          "agent": "Codex",
+          "cwd": "/work/stale-done",
+          "title": "Newest terminal state",
+          "phase": "done",
+          "detail": "Finished first",
+          "occurred_at": "2026-07-16T11:00:01Z"
+        },
+        {
+          "session_id": "stale-done",
+          "agent": "Codex",
+          "cwd": "/work/stale-done",
+          "title": "Older running state",
+          "phase": "running",
+          "detail": "Should be ignored",
+          "occurred_at": "2026-07-16T11:00:00Z"
+        },
+        {
+          "session_id": "equal-time",
+          "agent": "Codex",
+          "cwd": "/work/equal-time",
+          "title": "Same tick task",
+          "phase": "running",
+          "detail": "First phase",
+          "occurred_at": "2026-07-16T11:00:02Z"
+        },
+        {
+          "session_id": "equal-time",
+          "agent": "Codex",
+          "cwd": "/work/equal-time",
+          "phase": "done",
+          "detail": "Later arrival wins",
+          "occurred_at": "2026-07-16T11:00:02Z"
+        },
+        {
+          "session_id": "missing-time",
+          "agent": "Codex",
+          "cwd": "/work/missing-time",
+          "title": "Receive time fallback",
+          "phase": "running",
+          "detail": "Accepted without occurred_at"
+        }
+      ],
+      "expected_order": ["missing-time", "equal-time", "stale-done"],
+      "expected_phases": {
+        "missing-time": "running",
+        "equal-time": "done",
+        "stale-done": "done"
+      },
+      "expected_ongoing_count": 1,
+      "expected_clearable_count": 2,
+      "remove_ids": ["stale-done", "equal-time"],
+      "expected_order_after_removals": ["missing-time"]
     }
   ]
 }

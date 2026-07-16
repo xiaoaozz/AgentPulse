@@ -170,7 +170,7 @@ test("Stop marks a lifecycle-hook session done", () => {
   assert.equal(payload.phase, "done");
   assert.equal(payload.session_id, "session-1");
   assert.equal(payload.detail, "Finished");
-  assert.match(payload.occurred_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  assert.match(payload.occurred_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
 });
 
 test("an interrupted tool call pauses the session instead of leaving it running", () => {

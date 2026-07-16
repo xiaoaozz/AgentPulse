@@ -3,6 +3,7 @@ import Foundation
 
 public final class SocketServer: @unchecked Sendable {
     public static let defaultPath = "/tmp/agentpulse.sock"
+    public static let maxMessageBytes = 64 * 1024
 
     private let path: String
     private let queue = DispatchQueue(label: "app.agentpulse.socket", qos: .userInitiated)
@@ -115,8 +116,22 @@ public final class SocketServer: @unchecked Sendable {
         var buffer = [UInt8](repeating: 0, count: 8_192)
         while true {
             let count = Darwin.read(client, &buffer, buffer.count)
-            if count > 0 { result.append(contentsOf: buffer.prefix(count)) }
-            else { break }
+            if count > 0 {
+                guard result.count + count <= Self.maxMessageBytes else {
+                    onError(SocketError.messageTooLarge)
+                    return
+                }
+                result.append(contentsOf: buffer.prefix(count))
+                continue
+            }
+            if count == 0 { break }
+
+            if errno == EAGAIN || errno == EWOULDBLOCK {
+                onError(SocketError.readTimedOut)
+            } else {
+                emitPOSIXError()
+            }
+            return
         }
         guard !result.isEmpty else { return }
         do { onEvent(try EventDecoder.decode(result)) }
@@ -130,5 +145,17 @@ public final class SocketServer: @unchecked Sendable {
 
 public enum SocketError: LocalizedError {
     case pathTooLong
-    public var errorDescription: String? { "Unix socket 路径过长" }
+    case messageTooLarge
+    case readTimedOut
+
+    public var errorDescription: String? {
+        switch self {
+        case .pathTooLong:
+            return "Unix socket 路径过长"
+        case .messageTooLarge:
+            return "Unix socket 消息超过 64 KiB 限制"
+        case .readTimedOut:
+            return "Unix socket 客户端在 1 秒内未完成发送"
+        }
+    }
 }

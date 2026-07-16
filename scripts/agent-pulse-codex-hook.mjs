@@ -419,7 +419,7 @@ export function eventPayload(
     pid: process.ppid,
     terminal_bundle_id: terminalBundleId(options.env),
     terminal_process: terminalProcessName(options.env, options.platform),
-    occurred_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+    occurred_at: new Date().toISOString(),
   };
 }
 

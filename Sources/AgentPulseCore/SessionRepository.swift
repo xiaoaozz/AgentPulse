@@ -33,10 +33,11 @@ public final class SessionRepository: ObservableObject {
     }
 
     public func receive(_ event: AgentEvent, now: Date = .now) {
+        let candidateTime = event.occurredAt ?? now
         if let index = sessions.firstIndex(where: { $0.id == event.sessionId }) {
-            sessions[index].apply(event, now: now)
+            guard sessions[index].apply(event, at: candidateTime) else { return }
         } else {
-            sessions.append(AgentSession(event: event, now: now))
+            sessions.append(AgentSession(event: event, now: candidateTime))
         }
         sortSessions()
     }

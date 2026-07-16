@@ -3,6 +3,7 @@ import pathlib
 import json
 import tempfile
 import unittest
+from datetime import datetime, timezone
 
 
 SCRIPT = pathlib.Path(__file__).parents[2] / "scripts" / "agentpulse-hook.py"
@@ -167,6 +168,33 @@ class HookTransportTests(unittest.TestCase):
             HOOK.terminal_process_name("win32", {"TERM_PROGRAM": "vscode"}),
             "Code.exe",
         )
+
+    def test_agent_name_detects_codex_paths_across_platforms(self):
+        self.assertEqual(
+            HOOK.agent_name("/Users/me/.codex/sessions/thread.jsonl", {}),
+            "Codex",
+        )
+        self.assertEqual(
+            HOOK.agent_name(r"C:\Users\me\.codex\sessions\thread.jsonl", {}),
+            "Codex",
+        )
+        self.assertEqual(
+            HOOK.agent_name(r"C:/Users/me/.CODEX\sessions\thread.jsonl", {}),
+            "Codex",
+        )
+        self.assertEqual(
+            HOOK.agent_name("/tmp/.codex-backup/thread.jsonl", {"AGENTPULSE_AGENT": "Claude Code"}),
+            "Claude Code",
+        )
+        self.assertEqual(
+            HOOK.agent_name("/tmp/other/thread.jsonl", {"AGENTPULSE_AGENT": "Claude Code"}),
+            "Claude Code",
+        )
+        self.assertEqual(HOOK.agent_name("", {}), "Agent")
+
+    def test_python_payload_timestamp_keeps_fractional_seconds(self):
+        timestamp = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        self.assertRegex(timestamp, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
 
 
 if __name__ == "__main__":
