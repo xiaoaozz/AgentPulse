@@ -146,7 +146,7 @@ struct NotchView: View {
                     HStack(spacing: 0) {
                         Button { onJump(session) } label: {
                             HStack(spacing: 11) {
-                                Circle().fill(session.phase.displayColor).frame(width: 10, height: 10)
+                                SessionStatusIndicator(phase: session.phase, diameter: 10)
                                 VStack(alignment: .leading, spacing: 4) {
                                     HStack {
                                         Text(sessionHeadline(for: session))

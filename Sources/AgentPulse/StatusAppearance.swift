@@ -17,6 +17,44 @@ extension SessionPhase {
     }
 }
 
+struct SessionStatusIndicator: View {
+    let phase: SessionPhase
+    let diameter: CGFloat
+
+    @State private var isPulsing = false
+
+    var body: some View {
+        ZStack {
+            if phase == .running {
+                Circle()
+                    .stroke(Color(hex: 0x38BDF8).opacity(isPulsing ? 0 : 0.9), lineWidth: 1.5)
+                    .frame(width: diameter, height: diameter)
+                    .scaleEffect(isPulsing ? 2.25 : 1)
+
+                Circle()
+                    .fill(Color(hex: 0x38BDF8).opacity(0.2))
+                    .frame(width: diameter * 1.7, height: diameter * 1.7)
+                    .blur(radius: 3)
+            }
+
+            Circle()
+                .fill(phase.displayColor)
+                .frame(width: diameter, height: diameter)
+                .shadow(
+                    color: phase == .running ? Color(hex: 0x38BDF8).opacity(0.75) : .clear,
+                    radius: 4
+                )
+        }
+        .frame(width: diameter, height: diameter)
+        .onAppear {
+            guard phase == .running else { return }
+            withAnimation(.easeOut(duration: 1.35).repeatForever(autoreverses: false)) {
+                isPulsing = true
+            }
+        }
+    }
+}
+
 extension Color {
     init(hex: UInt32) {
         self.init(

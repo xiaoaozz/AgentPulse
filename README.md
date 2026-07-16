@@ -21,12 +21,25 @@
 
 ---
 
-## 截图
+## 产品展示
 
-> 📷 **截图占位**：在这里放置 macOS 刘海面板与 Windows 托盘面板的产品截图或演示 GIF。
+### macOS
 
-<!-- 建议文件路径：docs/assets/agentpulse-demo.gif -->
-<!-- 替换示例：![AgentPulse 演示](docs/assets/agentpulse-demo.gif) -->
+<p align="center">
+  <img src="docs/assets/agentpulse-macos-showcase.png" width="100%" alt="AgentPulse macOS 刘海面板产品展示">
+</p>
+
+### Windows
+
+> 🪟 **Windows 产品展示图待补充**
+>
+> 建议展示系统托盘入口与 WinUI 3 会话面板，成图保存为 `docs/assets/agentpulse-windows-showcase.png`。
+
+<!-- Windows 成图完成后，用下面的内容替换上方占位提示：
+<p align="center">
+  <img src="docs/assets/agentpulse-windows-showcase.png" width="100%" alt="AgentPulse Windows 托盘面板产品展示">
+</p>
+-->
 
 ## 为什么需要 AgentPulse？
 

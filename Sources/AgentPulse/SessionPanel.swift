@@ -92,7 +92,7 @@ private struct SessionRow: View {
     var body: some View {
         Button(action: jump) {
             HStack(spacing: 11) {
-                Circle().fill(color).frame(width: 9, height: 9)
+                SessionStatusIndicator(phase: session.phase, diameter: 9)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text(headline).lineLimit(1).font(.subheadline.weight(.medium))
