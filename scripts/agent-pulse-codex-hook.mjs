@@ -287,7 +287,14 @@ export function transcriptActionForLine(line) {
       occurredAt: record.timestamp,
     };
   }
-  if (record.payload?.type === "task_complete") return { stop: true };
+  if (record.payload?.type === "task_complete") {
+    const message = conciseContent(record.payload.last_agent_message);
+    return {
+      phase: message ? "done" : "failed",
+      detail: message || "Codex 会话异常结束",
+      occurredAt: record.timestamp,
+    };
+  }
   return null;
 }
 
@@ -367,8 +374,7 @@ async function watchTranscript() {
             remainder = lines.pop() || "";
             for (const line of lines) {
               const action = transcriptActionForLine(line);
-              if (action?.stop) return;
-              if (action?.phase === "paused") {
+              if (action?.phase) {
                 await send({
                   session_id: sessionId,
                   agent: agent === "codex" ? "Codex" : agent,

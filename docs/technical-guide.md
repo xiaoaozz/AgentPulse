@@ -243,7 +243,7 @@ node /Applications/AgentPulse.app/Contents/Resources/Scripts/agent-pulse-codex-h
 | `PermissionRequest` | `waiting_for_action`（人工审批）或 `running`（替我审批） |
 | `Stop` | `done` |
 
-生命周期 Hook 的工具事件会通过 `transcript_path` 读取本轮最新 GPT 回复，并在保持会话标题不变的前提下更新详情。因此 GPT 给出阶段说明并继续调用工具时，用户不必等到整轮结束就能看到最新进度。`UserPromptSubmit` 后还会从当时的文件末尾监视本轮 transcript；Codex 写入 `turn_aborted` 时立即发送 `paused`，正常完成或监视超过 24 小时后自动退出。这补足了生命周期 Hook 没有“用户中止”事件的问题。读取以本轮用户消息为边界；如果 transcript 不存在或格式无法识别，适配器会保留已有详情且不阻断 Codex。
+生命周期 Hook 的工具事件会通过 `transcript_path` 读取本轮最新 GPT 回复，并在保持会话标题不变的前提下更新详情。因此 GPT 给出阶段说明并继续调用工具时，用户不必等到整轮结束就能看到最新进度。`UserPromptSubmit` 后还会从当时的文件末尾监视本轮 transcript；Codex 写入 `turn_aborted` 时立即发送 `paused`，写入 `task_complete` 时则以最终回复是否存在分别收敛为 `done` 或 `failed`，监视超过 24 小时后自动退出。这既补足了生命周期 Hook 没有“用户中止”事件的问题，也避免系统异常且没有 Agent 回复的会话残留在进行态。读取以本轮用户消息为边界；如果 transcript 不存在或格式无法识别，适配器会保留已有详情且不阻断 Codex。
 
 适配器也能转换由外部桥接器主动转发的 Codex App Server 事件：`turn/interrupt` 会立即把对应会话标记为 `paused`；每个 `item/completed` 的 `agentMessage` 会更新详情；`turn/completed` 中的 `failed` 映射为 `failed`，其余完成状态映射为 `done`。AgentPulse 不会旁路订阅其他客户端现有的 App Server 连接，因此常规 Hooks 接入的动态详情来自上述 transcript 路径。
 

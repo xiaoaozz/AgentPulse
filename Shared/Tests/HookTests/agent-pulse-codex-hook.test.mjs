@@ -226,7 +226,7 @@ test("an app-server interrupt request immediately pauses the matching session", 
   assert.equal(payload.session_id, "thread-interrupt-request");
 });
 
-test("a transcript turn_aborted record pauses a lifecycle-hook session", () => {
+test("transcript terminal records always settle a lifecycle-hook session", () => {
   assert.deepEqual(transcriptActionForLine(JSON.stringify({
     timestamp: "2026-07-16T11:12:55.447Z",
     type: "event_msg",
@@ -237,9 +237,23 @@ test("a transcript turn_aborted record pauses a lifecycle-hook session", () => {
     occurredAt: "2026-07-16T11:12:55.447Z",
   });
   assert.deepEqual(transcriptActionForLine(JSON.stringify({
+    timestamp: "2026-07-16T11:13:00.000Z",
     type: "event_msg",
-    payload: { type: "task_complete" },
-  })), { stop: true });
+    payload: { type: "task_complete", last_agent_message: "处理完成" },
+  })), {
+    phase: "done",
+    detail: "处理完成",
+    occurredAt: "2026-07-16T11:13:00.000Z",
+  });
+  assert.deepEqual(transcriptActionForLine(JSON.stringify({
+    timestamp: "2026-07-16T11:13:01.000Z",
+    type: "event_msg",
+    payload: { type: "task_complete", last_agent_message: null },
+  })), {
+    phase: "failed",
+    detail: "Codex 会话异常结束",
+    occurredAt: "2026-07-16T11:13:01.000Z",
+  });
   assert.equal(transcriptActionForLine("not json"), null);
 });
 
