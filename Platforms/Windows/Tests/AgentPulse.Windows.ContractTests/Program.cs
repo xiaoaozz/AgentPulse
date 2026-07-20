@@ -59,7 +59,7 @@ static async Task ValidMessageIsDeliveredAsync()
         {"session_id":"valid-message","agent":"Codex","cwd":"C:\\work","title":"Task","phase":"done","detail":"Delivered"}
         """);
 
-    var value = await WaitAsync(received.Task, "valid named-pipe delivery");
+    var value = await WaitForResultAsync(received.Task, "valid named-pipe delivery");
     AssertEqual("valid-message", value.SessionId, "valid named-pipe session");
     AssertEqual("done", value.Phase, "valid named-pipe phase");
     AssertEqual("Delivered", value.Detail, "valid named-pipe detail");
@@ -81,14 +81,14 @@ static async Task MalformedMessageReportsErrorAndServerRecoversAsync()
     server.Start();
 
     await SendRawAsync(pipeName, "{");
-    var decodeError = await WaitAsync(errors.Task, "malformed named-pipe error");
+    var decodeError = await WaitForResultAsync(errors.Task, "malformed named-pipe error");
     AssertTrue(decodeError is JsonException, "malformed payload should report a JSON error");
 
     await SendRawAsync(pipeName, """
         {"session_id":"recovered-message","agent":"Codex","cwd":"C:\\work","phase":"running","detail":"Recovered"}
         """);
 
-    var value = await WaitAsync(received.Task, "named-pipe recovery delivery");
+    var value = await WaitForResultAsync(received.Task, "named-pipe recovery delivery");
     AssertEqual("recovered-message", value.SessionId, "recovered named-pipe session");
     AssertEqual("running", value.Phase, "recovered named-pipe phase");
     AssertEqual(1, errorCount, "malformed named-pipe error count");
@@ -99,7 +99,7 @@ static async Task IdleDisposalCompletesPromptlyAsync()
     var pipeName = UniquePipeName();
     await using var server = new NamedPipeEventServer(_ => { }, _ => { }, pipeName);
     server.Start();
-    await WaitAsync(server.DisposeAsync().AsTask(), "idle pipe disposal");
+    await WaitForCompletionAsync(server.DisposeAsync().AsTask(), "idle pipe disposal");
 }
 
 static async Task OversizedMessageReportsErrorAndServerRecoversAsync()
@@ -121,13 +121,13 @@ static async Task OversizedMessageReportsErrorAndServerRecoversAsync()
     await SendRawAsync(pipeName,
         $$"""{"session_id":"too-large","agent":"Codex","cwd":"C:\\work","phase":"running","detail":"{{oversized}}"}""");
 
-    var error = await WaitAsync(errors.Task, "oversized named-pipe error");
+    var error = await WaitForResultAsync(errors.Task, "oversized named-pipe error");
     AssertTrue(error is InvalidDataException, "oversized payload should report a size error");
 
     await SendRawAsync(pipeName, """
         {"session_id":"post-oversize","agent":"Codex","cwd":"C:\\work","phase":"done"}
         """);
-    var recovered = await WaitAsync(received.Task, "oversized named-pipe recovery");
+    var recovered = await WaitForResultAsync(received.Task, "oversized named-pipe recovery");
     AssertEqual("post-oversize", recovered.SessionId, "oversized recovery session");
     AssertEqual(1, errorCount, "oversized named-pipe error count");
 }
@@ -148,14 +148,14 @@ static async Task IdleClientTimesOutAndLaterEventsStillFlowAsync()
     server.Start();
 
     await using var idleClient = await ConnectAsync(pipeName);
-    var error = await WaitAsync(errors.Task, "idle named-pipe timeout");
+    var error = await WaitForResultAsync(errors.Task, "idle named-pipe timeout");
     AssertTrue(error is TimeoutException or OperationCanceledException, "idle client should report a timeout-like error");
     await idleClient.DisposeAsync();
 
     await SendRawAsync(pipeName, """
         {"session_id":"post-timeout","agent":"Codex","cwd":"C:\\work","phase":"done","detail":"Recovered after timeout"}
         """);
-    var recovered = await WaitAsync(received.Task, "idle named-pipe recovery");
+    var recovered = await WaitForResultAsync(received.Task, "idle named-pipe recovery");
     AssertEqual("post-timeout", recovered.SessionId, "idle timeout recovery session");
     AssertEqual(1, errorCount, "idle named-pipe error count");
 }
@@ -169,7 +169,7 @@ static async Task ConnectedIdleClientDoesNotBlockDisposalAsync()
 
     await using var idleClient = await ConnectAsync(pipeName);
     var disposeTask = server.DisposeAsync().AsTask();
-    await WaitAsync(disposeTask, "connected idle pipe disposal");
+    await WaitForCompletionAsync(disposeTask, "connected idle pipe disposal");
 }
 
 static async Task<NamedPipeClientStream> ConnectAsync(string pipeName)
@@ -187,11 +187,19 @@ static async Task SendRawAsync(string pipeName, string payload)
     await client.FlushAsync();
 }
 
-static async Task<T> WaitAsync<T>(Task<T> task, string context) =>
-    await task.WaitAsync(TimeSpan.FromSeconds(3))
-    ?? throw new InvalidOperationException($"{context} unexpectedly completed without a result.");
+static async Task<T> WaitForResultAsync<T>(Task<T> task, string context)
+{
+    try
+    {
+        return await task.WaitAsync(TimeSpan.FromSeconds(3));
+    }
+    catch (TimeoutException error)
+    {
+        throw new InvalidOperationException($"{context} timed out.", error);
+    }
+}
 
-static async Task WaitAsync(Task task, string context)
+static async Task WaitForCompletionAsync(Task task, string context)
 {
     try
     {
@@ -219,7 +227,7 @@ static string FindSharedFixturePath()
     throw new FileNotFoundException($"Could not locate {relativePath} from {AppContext.BaseDirectory}");
 }
 
-static void AssertEqual<T>(T expected, T actual, string context) where T : notnull
+static void AssertEqual<T>(T expected, T actual, string context)
 {
     if (!EqualityComparer<T>.Default.Equals(expected, actual))
         throw new InvalidOperationException($"{context}: expected {expected}, got {actual}");
