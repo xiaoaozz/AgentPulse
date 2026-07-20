@@ -7,7 +7,10 @@ struct SettingsView: View {
         Form {
             Section("刘海面板") {
                 LabeledContent("显示方式", value: "状态文字 + 会话数量")
-                LabeledContent("菜单栏图标", value: "默认隐藏")
+                LabeledContent("菜单栏图标", value: "隐藏刘海面板后显示")
+                Text("点击菜单栏的脉冲图标可恢复刘海面板。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section("交互原则") {
                 Label("只展示状态，不发送 macOS 通知或弹出审批框。", systemImage: "hand.tap")

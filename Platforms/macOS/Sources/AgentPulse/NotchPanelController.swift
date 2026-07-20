@@ -4,10 +4,11 @@ import Combine
 import SwiftUI
 
 @MainActor
-final class NotchPanelController {
+final class NotchPanelController: NSObject {
     private let panel: NotchPanel
     private let repository: SessionRepository
     private var expanded = false
+    private var statusItem: NSStatusItem?
     private var screenObserver: NotificationObserverToken?
     private var sessionsObserver: AnyCancellable?
 
@@ -31,6 +32,8 @@ final class NotchPanelController {
         panel.isMovable = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 
+        super.init()
+
         // Establish the AppKit window geometry before attaching a SwiftUI view.
         // Resizing an attached NSHostingView while another SwiftUI graph is
         // being initialized can trip AttributeGraph's re-entrancy precondition.
@@ -40,6 +43,7 @@ final class NotchPanelController {
             repository: repository,
             onHoverChanged: { [weak self] expanded in self?.setExpanded(expanded) },
             onJump: onJump,
+            onHide: { [weak self] in self?.hideNotch() },
             onQuit: onQuit
         )
         panel.contentView = NSHostingView(rootView: root)
@@ -75,6 +79,35 @@ final class NotchPanelController {
         guard expanded != value else { return }
         expanded = value
         placePanel(animated: true)
+    }
+
+    private func hideNotch() {
+        expanded = false
+        panel.orderOut(nil)
+
+        guard statusItem == nil else { return }
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if let button = item.button {
+            let image = NSImage(systemSymbolName: "waveform.path.ecg", accessibilityDescription: "AgentPulse")
+            image?.isTemplate = true
+            button.image = image
+            button.imagePosition = .imageOnly
+            button.toolTip = "显示 AgentPulse 刘海面板"
+            button.target = self
+            button.action = #selector(restoreNotch)
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        }
+        statusItem = item
+    }
+
+    @objc private func restoreNotch() {
+        if let statusItem {
+            NSStatusBar.system.removeStatusItem(statusItem)
+            self.statusItem = nil
+        }
+        expanded = false
+        placePanel(animated: false)
+        panel.orderFrontRegardless()
     }
 
     private func placePanel(animated: Bool) {

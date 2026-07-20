@@ -9,9 +9,11 @@ struct NotchView: View {
     @ObservedObject var repository: SessionRepository
     let onHoverChanged: (Bool) -> Void
     let onJump: (AgentSession) -> Void
+    let onHide: () -> Void
     let onQuit: () -> Void
     @State private var expanded = false
     @State private var hoverTransitionTask: Task<Void, Never>?
+    @State private var footerHint: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -117,20 +119,68 @@ struct NotchView: View {
     }
 
     private var expandedFooter: some View {
-        HStack {
-            Spacer()
-            Button(action: onQuit) {
-                Image(systemName: "power")
-                    .font(.system(size: 11, weight: .semibold))
-                    .frame(width: 26, height: 26)
-                    .background(.red.opacity(0.12), in: Circle())
+        ZStack(alignment: .topTrailing) {
+            HStack(spacing: 6) {
+                Spacer()
+                Button(action: hideNotch) {
+                    Image(systemName: "menubar.rectangle")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 26, height: 26)
+                        .background(.white.opacity(0.07), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white.opacity(0.68))
+                .help("隐藏刘海面板，在菜单栏显示图标")
+                .accessibilityLabel("隐藏")
+                .onHover { hovering in
+                    updateFooterHint("隐藏", hovering: hovering)
+                }
+
+                Button(action: onQuit) {
+                    Image(systemName: "power")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 26, height: 26)
+                        .background(.red.opacity(0.12), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.red.opacity(0.9))
+                .help("退出 AgentPulse")
+                .accessibilityLabel("退出")
+                .onHover { hovering in
+                    updateFooterHint("退出", hovering: hovering)
+                }
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.red.opacity(0.9))
-            .help("退出 AgentPulse")
+
+            if let footerHint {
+                Text(footerHint)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.88))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(.white.opacity(0.12), in: Capsule())
+                    .offset(y: -26)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)))
+                    .allowsHitTesting(false)
+            }
         }
         .padding(.trailing, 12)
         .frame(height: 40)
+        .animation(.easeOut(duration: 0.12), value: footerHint)
+    }
+
+    private func updateFooterHint(_ text: String, hovering: Bool) {
+        if hovering {
+            footerHint = text
+        } else if footerHint == text {
+            footerHint = nil
+        }
+    }
+
+    private func hideNotch() {
+        hoverTransitionTask?.cancel()
+        expanded = false
+        onHoverChanged(false)
+        onHide()
     }
 
     @ViewBuilder
