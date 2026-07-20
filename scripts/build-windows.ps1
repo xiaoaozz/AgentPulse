@@ -6,7 +6,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
-$Project = Join-Path $Root "Windows/AgentPulse.Windows/AgentPulse.Windows.csproj"
+$Project = Join-Path $Root "Platforms/Windows/Sources/AgentPulse.Windows/AgentPulse.Windows.csproj"
 $Dist = Join-Path $Root "dist"
 $Publish = Join-Path $Dist "AgentPulse-$Runtime"
 $VelopackOutput = Join-Path $Dist "velopack-$Runtime"
@@ -30,7 +30,7 @@ $Protocol = Join-Path $Publish "Protocol"
 New-Item -ItemType Directory -Force -Path $Scripts, $Protocol | Out-Null
 Copy-Item (Join-Path $Root "scripts/agent-pulse-codex-hook.mjs") $Scripts
 Copy-Item (Join-Path $Root "scripts/agentpulse-hook.py") $Scripts
-Copy-Item (Join-Path $Root "Protocol/agent-event.schema.json") $Protocol
+Copy-Item (Join-Path $Root "Shared/Protocol/agent-event.schema.json") $Protocol
 
 if (-not (Test-Path (Join-Path $ToolDirectory "vpk.exe"))) {
     dotnet tool install vpk --tool-path $ToolDirectory --version 1.2.0

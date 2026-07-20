@@ -1,0 +1,139 @@
+{
+  "protocol_version": 1,
+  "scenarios": [
+    {
+      "name": "attention, active, and completed sessions share ordering and deletion semantics",
+      "events": [
+        {
+          "session_id": "active",
+          "agent": "Codex",
+          "cwd": "C:\\work\\active",
+          "title": "Active task",
+          "phase": "preparing",
+          "detail": "Preparing",
+          "pid": 1200,
+          "terminal_process": "WindowsTerminal.exe",
+          "occurred_at": "2026-07-14T01:00:00Z"
+        },
+        {
+          "session_id": "completed",
+          "agent": "Claude Code",
+          "cwd": "/work/completed",
+          "title": "Completed task",
+          "phase": "done",
+          "detail": "Finished",
+          "occurred_at": "2026-07-14T01:02:00Z"
+        },
+        {
+          "session_id": "attention",
+          "agent": "Codex",
+          "cwd": "/work/attention",
+          "title": "Approval needed",
+          "phase": "waiting_for_action",
+          "detail": "Approve command",
+          "occurred_at": "2026-07-14T01:03:00Z"
+        },
+        {
+          "session_id": "active",
+          "agent": "Codex",
+          "cwd": "C:\\work\\active",
+          "title": "Active task",
+          "phase": "running",
+          "detail": null,
+          "pid": 1200,
+          "terminal_process": "WindowsTerminal.exe",
+          "occurred_at": "2026-07-14T01:04:00Z"
+        }
+      ],
+      "expected_order": ["attention", "active", "completed"],
+      "expected_ongoing_count": 2,
+      "expected_clearable_count": 1,
+      "remove_ids": ["active", "completed"],
+      "expected_order_after_removals": ["attention", "active"]
+    },
+    {
+      "name": "interrupted sessions remain visible without contributing to ongoing count",
+      "events": [
+        {
+          "session_id": "interrupted",
+          "agent": "Codex",
+          "cwd": "/work/interrupted",
+          "title": "Interrupted task",
+          "phase": "running",
+          "occurred_at": "2026-07-16T11:12:49Z"
+        },
+        {
+          "session_id": "interrupted",
+          "agent": "Codex",
+          "cwd": "/work/interrupted",
+          "phase": "paused",
+          "detail": "已由用户中止",
+          "occurred_at": "2026-07-16T11:12:55Z"
+        }
+      ],
+      "expected_order": ["interrupted"],
+      "expected_ongoing_count": 0,
+      "expected_clearable_count": 1,
+      "remove_ids": ["interrupted"],
+      "expected_order_after_removals": []
+    },
+    {
+      "name": "stale session events are ignored while equal and missing timestamps still apply",
+      "events": [
+        {
+          "session_id": "stale-done",
+          "agent": "Codex",
+          "cwd": "/work/stale-done",
+          "title": "Newest terminal state",
+          "phase": "done",
+          "detail": "Finished first",
+          "occurred_at": "2026-07-16T11:00:01Z"
+        },
+        {
+          "session_id": "stale-done",
+          "agent": "Codex",
+          "cwd": "/work/stale-done",
+          "title": "Older running state",
+          "phase": "running",
+          "detail": "Should be ignored",
+          "occurred_at": "2026-07-16T11:00:00Z"
+        },
+        {
+          "session_id": "equal-time",
+          "agent": "Codex",
+          "cwd": "/work/equal-time",
+          "title": "Same tick task",
+          "phase": "running",
+          "detail": "First phase",
+          "occurred_at": "2026-07-16T11:00:02Z"
+        },
+        {
+          "session_id": "equal-time",
+          "agent": "Codex",
+          "cwd": "/work/equal-time",
+          "phase": "done",
+          "detail": "Later arrival wins",
+          "occurred_at": "2026-07-16T11:00:02Z"
+        },
+        {
+          "session_id": "missing-time",
+          "agent": "Codex",
+          "cwd": "/work/missing-time",
+          "title": "Receive time fallback",
+          "phase": "running",
+          "detail": "Accepted without occurred_at"
+        }
+      ],
+      "expected_order": ["missing-time", "equal-time", "stale-done"],
+      "expected_phases": {
+        "missing-time": "running",
+        "equal-time": "done",
+        "stale-done": "done"
+      },
+      "expected_ongoing_count": 1,
+      "expected_clearable_count": 2,
+      "remove_ids": ["stale-done", "equal-time"],
+      "expected_order_after_removals": ["missing-time"]
+    }
+  ]
+}

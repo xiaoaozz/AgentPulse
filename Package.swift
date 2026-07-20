@@ -9,11 +9,19 @@ let package = Package(
         .library(name: "AgentPulseCore", targets: ["AgentPulseCore"]),
     ],
     targets: [
-        .target(name: "AgentPulseCore"),
+        .target(
+            name: "AgentPulseCore",
+            path: "Platforms/macOS/Sources/AgentPulseCore"
+        ),
         .executableTarget(
             name: "AgentPulse",
-            dependencies: ["AgentPulseCore"]
+            dependencies: ["AgentPulseCore"],
+            path: "Platforms/macOS/Sources/AgentPulse"
         ),
-        .testTarget(name: "AgentPulseCoreTests", dependencies: ["AgentPulseCore"]),
+        .testTarget(
+            name: "AgentPulseCoreTests",
+            dependencies: ["AgentPulseCore"],
+            path: "Platforms/macOS/Tests/AgentPulseCoreTests"
+        ),
     ]
 )

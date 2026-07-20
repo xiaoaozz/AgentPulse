@@ -238,6 +238,14 @@ def send_payload(encoded, platform=sys.platform, endpoint=None):
         client.sendall(encoded)
 
 
+def agent_name(transcript, env=os.environ):
+    if isinstance(transcript, str):
+        components = [part.casefold() for part in transcript.replace("\\", "/").split("/") if part]
+        if any(part == ".codex" for part in components):
+            return "Codex"
+    return env.get("AGENTPULSE_AGENT", "Agent")
+
+
 def main():
     data = json.load(sys.stdin)
     event = (
@@ -250,7 +258,7 @@ def main():
     if phase is None:
         return
     transcript = data.get("transcript_path", "") or ""
-    agent = "Codex" if "/.codex/" in transcript else os.environ.get("AGENTPULSE_AGENT", "Agent")
+    agent = agent_name(transcript, os.environ)
     detail = detail_for(event, data)
     session_id = (
         data.get("session_id")
@@ -270,7 +278,7 @@ def main():
         "tty": os.ttyname(0) if hasattr(os, "ttyname") and os.isatty(0) else None,
         "terminal_bundle_id": terminal_bundle_id(),
         "terminal_process": terminal_process_name(),
-        "occurred_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "occurred_at": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
     }
     encoded = json.dumps(payload, ensure_ascii=False).encode()
     try:

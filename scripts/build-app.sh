@@ -9,8 +9,8 @@ ARCHS="${ARCHS:-arm64 x86_64}"
 DIST_DIR="${DIST_DIR:-${ROOT_DIR}/dist}"
 ARTIFACT_SUFFIX="${ARTIFACT_SUFFIX:-}"
 APP_PATH="${DIST_DIR}/AgentPulse.app"
-INFO_TEMPLATE="${ROOT_DIR}/Resources/Info.plist"
-ICON_SOURCE="${ROOT_DIR}/Resources/AppIcon.png"
+INFO_TEMPLATE="${ROOT_DIR}/Platforms/macOS/Resources/Info.plist"
+ICON_SOURCE="${ROOT_DIR}/Platforms/macOS/Resources/AppIcon.png"
 
 if [[ " ${ARCHS} " == *" arm64 "* && " ${ARCHS} " == *" x86_64 "* ]]; then
     ARCH_LABEL="macos-universal"

@@ -1,7 +1,7 @@
 # AgentPulse
 
 <p align="center">
-  <img src="Resources/AppIcon.png" width="128" height="128" alt="AgentPulse Logo">
+  <img src="Platforms/macOS/Resources/AppIcon.png" width="128" height="128" alt="AgentPulse Logo">
 </p>
 
 <p align="center">
@@ -149,33 +149,35 @@ swift run AgentPulse
 需要 .NET 8 SDK：
 
 ```powershell
-dotnet build Windows/AgentPulse.Windows/AgentPulse.Windows.csproj -c Release -p:Platform=x64
+dotnet build Platforms/Windows/Sources/AgentPulse.Windows/AgentPulse.Windows.csproj -c Release -p:Platform=x64
 ```
 
 运行测试：
 
 ```bash
 swift test
-node --test Tests/HookTests/agent-pulse-codex-hook.test.mjs
-python3 -m unittest discover -s Tests/HookTests -p 'test_*.py'
+node --test Shared/Tests/HookTests/agent-pulse-codex-hook.test.mjs
+python3 -m unittest discover -s Shared/Tests/HookTests -p 'test_*.py'
 ```
 
 ## 文档
 
 - [技术指南](docs/technical-guide.md)：完整安装说明、Hook 配置、事件协议、构建发布与故障排查
-- [事件 JSON Schema](Protocol/agent-event.schema.json)：通用事件字段与约束
-- [跨平台协议 Fixtures](Protocol/Fixtures/session-scenarios.json)：客户端共享行为示例
+- [事件 JSON Schema](Shared/Protocol/agent-event.schema.json)：通用事件字段与约束
+- [跨平台协议 Fixtures](Shared/Protocol/Fixtures/session-scenarios.json)：客户端共享行为示例
 
 ## 项目结构
 
 ```text
 AgentPulse/
-├── Sources/AgentPulse/          # macOS 应用与刘海面板
-├── Sources/AgentPulseCore/      # Swift 事件模型、服务与会话仓库
-├── Windows/                     # WinUI 3 客户端与 C# 核心
+├── Platforms/
+│   ├── macOS/                   # Swift 应用、Core 与资源
+│   └── Windows/                 # WinUI 3 客户端、C# Core 与契约测试
+├── Shared/
+│   ├── Protocol/                # 跨平台事件协议
+│   └── Tests/HookTests/         # 通用 Hook 测试
 ├── scripts/                     # Codex / Claude Hook 适配器
-├── Protocol/                    # 跨平台事件协议
-└── Tests/                       # Swift、Node.js 与 Python 测试
+└── Package.swift
 ```
 
 ## 参与贡献

@@ -110,7 +110,7 @@ scripts/build-app.sh
 
 ### GitHub Release
 
-推送 `v*` 标签会触发 [`.github/workflows/release.yml`](../.github/workflows/release.yml)，运行全部测试、构建 Universal App 并创建 GitHub Release：
+推送 `v*` 标签会触发 [`.github/workflows/release.yml`](../.github/workflows/release.yml)，运行全部测试、分别构建 macOS 与 Windows 包，并且只会在两个平台产物都准备完成后统一创建或更新 GitHub Release：
 
 ```bash
 git tag v0.1.0
@@ -243,7 +243,7 @@ node /Applications/AgentPulse.app/Contents/Resources/Scripts/agent-pulse-codex-h
 | `PermissionRequest` | `waiting_for_action`（人工审批）或 `running`（替我审批） |
 | `Stop` | `done` |
 
-生命周期 Hook 的工具事件会通过 `transcript_path` 读取本轮最新 GPT 回复，并在保持会话标题不变的前提下更新详情。因此 GPT 给出阶段说明并继续调用工具时，用户不必等到整轮结束就能看到最新进度。`UserPromptSubmit` 后还会从当时的文件末尾监视本轮 transcript；Codex 写入 `turn_aborted` 时立即发送 `paused`，正常完成或监视超过 24 小时后自动退出。这补足了生命周期 Hook 没有“用户中止”事件的问题。读取以本轮用户消息为边界；如果 transcript 不存在或格式无法识别，适配器会保留已有详情且不阻断 Codex。
+生命周期 Hook 的工具事件会通过 `transcript_path` 读取本轮最新 GPT 回复，并在保持会话标题不变的前提下更新详情。因此 GPT 给出阶段说明并继续调用工具时，用户不必等到整轮结束就能看到最新进度。`UserPromptSubmit` 后还会从当时的文件末尾监视本轮 transcript；Codex 写入 `turn_aborted` 时立即发送 `paused`，写入 `task_complete` 时则以最终回复是否存在分别收敛为 `done` 或 `failed`，监视超过 24 小时后自动退出。这既补足了生命周期 Hook 没有“用户中止”事件的问题，也避免系统异常且没有 Agent 回复的会话残留在进行态。读取以本轮用户消息为边界；如果 transcript 不存在或格式无法识别，适配器会保留已有详情且不阻断 Codex。
 
 适配器也能转换由外部桥接器主动转发的 Codex App Server 事件：`turn/interrupt` 会立即把对应会话标记为 `paused`；每个 `item/completed` 的 `agentMessage` 会更新详情；`turn/completed` 中的 `failed` 映射为 `failed`，其余完成状态映射为 `done`。AgentPulse 不会旁路订阅其他客户端现有的 App Server 连接，因此常规 Hooks 接入的动态详情来自上述 transcript 路径。
 
@@ -314,7 +314,7 @@ python3 /Applications/AgentPulse.app/Contents/Resources/Scripts/agentpulse-hook.
 python3 /absolute/path/to/AgentPulse/scripts/agentpulse-hook.py
 ```
 
-适配器不会修改 `~/.claude`、`~/.codex` 或其他 Agent 配置，请根据实际客户端支持的事件，将命令合并到现有 Hook 设置中。未知事件会被忽略，避免错误地覆盖当前会话状态。
+适配器不会修改 `~/.claude`、`~/.codex` 或其他 Agent 配置，请根据实际客户端支持的事件，将命令合并到现有 Hook 设置中。未知事件会被忽略，避免错误地覆盖当前会话状态。Python 适配器会把 transcript 路径中包含 `.codex` 目录组件的会话识别为 `Codex`；其他路径继续回退到 `AGENTPULSE_AGENT`，默认值为 `Agent`。
 
 ### 适配器环境变量
 
@@ -332,7 +332,7 @@ node scripts/agent-pulse-codex-hook.mjs --source MyAgent
 
 ## 通用事件协议
 
-每次连接发送一个 UTF-8 JSON 对象，发送完成后关闭连接。服务端以连接结束作为消息结束标记，因此不要在同一次连接中连续发送多个对象。
+每次连接发送一个 UTF-8 JSON 对象，发送完成后关闭连接。服务端以连接结束作为消息结束标记，因此不要在同一次连接中连续发送多个对象。单条消息的 UTF-8 编码长度上限为 64 KiB，且发送方需要在 1 秒内写完并关闭连接；超限或超时的连接会被拒绝，但不会停止后续监听。
 
 ```json
 {
@@ -362,7 +362,7 @@ node scripts/agent-pulse-codex-hook.mjs --source MyAgent
 | `pid` | 否 | integer | 来源应用的进程 ID，用于点击会话时激活应用 |
 | `tty` | 否 | string | 来源 TTY；当前仅存储，尚未用于窗口定位 |
 | `terminal_bundle_id` | 否 | string | macOS 应用 bundle identifier，跳转时优先使用 |
-| `occurred_at` | 否 | string | 带或不带小数秒的 ISO 8601 时间；省略时使用服务端接收时间 |
+| `occurred_at` | 否 | string | 带或不带小数秒的 ISO 8601 时间；较旧事件会被忽略；相同时间戳按到达顺序覆盖；省略时使用服务端接收时间 |
 
 ### 状态
 
@@ -378,7 +378,7 @@ node scripts/agent-pulse-codex-hook.mjs --source MyAgent
 | `paused` | Paused | `#8B5CF6` | 任务已由用户中止 | 否 | 是 |
 | `offline` | Offline | `#4B5563` | Agent 离线 | 否 | 否 |
 
-主会话列表排序优先级为：等待操作 → 执行中/准备中 → 暂停 → 空闲 → 完成/警告/失败 → 离线。同一优先级内，最近更新的会话排在前面。刘海展开区域独立按最近使用时间倒序展示，最多显示 5 条会话。
+主会话列表排序优先级为：等待操作 → 执行中/准备中 → 暂停 → 空闲 → 完成/警告/失败 → 离线。同一优先级内，最近更新的会话排在前面。对同一 `session_id`，如果新事件的 `occurred_at` 严格早于当前记录的 `updatedAt`，该事件会被整体忽略；相同时间戳继续按到达顺序生效。刘海展开区域独立按最近使用时间倒序展示，最多显示 5 条会话。
 
 刘海折叠状态和 Windows 托盘只反映当前仍在进行的工作：优先显示待操作，其次显示准备中或运行中；如果只剩中止、完成、失败、就绪或离线会话，全局状态恢复为初始 `Ready`/“等待 Agent 会话”。这些终态仍保留在展开后的单条会话中，并可单独删除或一键清理。清除 `paused` 后，如果用户在原 Codex 会话继续提交请求，新的 `UserPromptSubmit` 事件会以同一会话 ID 创建一条全新的任务记录。
 
@@ -401,17 +401,29 @@ node scripts/agent-pulse-codex-hook.mjs --source MyAgent
 - 没有会话时只显示“等待 Agent 会话”，不展示额外的品牌标题。
 - 应用默认不显示 macOS 菜单栏或 Dock 图标；展开刘海面板后可点击右下角电源图标安全退出。
 
+## 传输限制与恢复
+
+- Unix Domain Socket 和 Windows Named Pipe 都要求一条连接只承载一个 UTF-8 JSON 对象。
+- 编码后的消息大小上限为 64 KiB；超过上限会报错并丢弃该连接，不会产生部分 `AgentEvent`。
+- 发送方需要在一秒内完成写入并关闭连接；连接闲置超时会报错并被关闭。
+- 单次坏连接不会让监听器退出，后续合法连接仍会继续被接收。
+
 ## 项目结构
 
 ```text
 AgentPulse/
-├── Sources/AgentPulse/             # 刘海面板、设置与应用跳转
-├── Sources/AgentPulseCore/         # 事件模型、解码、会话仓库与 Socket 服务
-├── Protocol/                       # 跨平台 JSON Schema 与行为 Fixtures
-├── Windows/                        # WinUI 3 客户端、C# 核心与契约测试
+├── Platforms/
+│   ├── macOS/
+│   │   ├── Sources/AgentPulse/     # 刘海面板、设置与应用跳转
+│   │   ├── Sources/AgentPulseCore/ # 事件模型、解码、会话仓库与 Socket 服务
+│   │   └── Tests/AgentPulseCoreTests/
+│   └── Windows/
+│       ├── Sources/                # WinUI 3 客户端与 C# 核心
+│       └── Tests/AgentPulse.Windows.ContractTests/
+├── Shared/
+│   ├── Protocol/                   # 跨平台 JSON Schema 与行为 Fixtures
+│   └── Tests/HookTests/            # Node.js / Python Hook 测试
 ├── scripts/                        # Codex/Claude 风格 Hook 适配器
-├── Tests/AgentPulseCoreTests/      # Swift Core 单元与 Socket 测试
-├── Tests/HookTests/                # Node.js Hook 映射测试
 └── Package.swift
 ```
 
@@ -433,20 +445,20 @@ swift test
 运行 Node.js Hook 测试：
 
 ```bash
-node --test Tests/HookTests/agent-pulse-codex-hook.test.mjs
+node --test Shared/Tests/HookTests/agent-pulse-codex-hook.test.mjs
 ```
 
 运行 Python Hook 测试：
 
 ```bash
-python3 -m unittest discover -s Tests/HookTests -p 'test_*.py'
+python3 -m unittest discover -s Shared/Tests/HookTests -p 'test_*.py'
 ```
 
 在 Windows 上运行共享协议测试与构建：
 
 ```powershell
-dotnet run --project Windows/AgentPulse.Windows.ContractTests -- Protocol/Fixtures/session-scenarios.json
-dotnet build Windows/AgentPulse.Windows/AgentPulse.Windows.csproj -c Release -p:Platform=x64
+dotnet run --project Platforms/Windows/Tests/AgentPulse.Windows.ContractTests -- Shared/Protocol/Fixtures/session-scenarios.json
+dotnet build Platforms/Windows/Sources/AgentPulse.Windows/AgentPulse.Windows.csproj -c Release -p:Platform=x64
 ```
 
 测试覆盖事件时间解析、会话更新与排序、结果清理、Socket 延迟写入，以及 Codex Hook 的主要事件映射。
