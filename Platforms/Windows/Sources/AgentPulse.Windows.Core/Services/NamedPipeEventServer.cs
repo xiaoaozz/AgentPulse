@@ -15,7 +15,9 @@ public sealed class NamedPipeEventServer : IAsyncDisposable
     private readonly Action<AgentEvent> _onEvent;
     private readonly Action<Exception> _onError;
     private readonly CancellationTokenSource _cancellation = new();
+    private readonly object _lifecycleLock = new();
     private Task? _listener;
+    private Task? _disposeTask;
 
     public NamedPipeEventServer(
         Action<AgentEvent> onEvent,
@@ -27,7 +29,15 @@ public sealed class NamedPipeEventServer : IAsyncDisposable
         _pipeName = pipeName;
     }
 
-    public void Start() => _listener ??= ListenAsync(_cancellation.Token);
+    public void Start()
+    {
+        lock (_lifecycleLock)
+        {
+            if (_disposeTask is not null)
+                throw new ObjectDisposedException(nameof(NamedPipeEventServer));
+            _listener ??= ListenAsync(_cancellation.Token);
+        }
+    }
 
     private async Task ListenAsync(CancellationToken cancellationToken)
     {
@@ -93,7 +103,16 @@ public sealed class NamedPipeEventServer : IAsyncDisposable
         return JsonSerializer.Deserialize<AgentEvent>(encoded);
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
+    {
+        lock (_lifecycleLock)
+        {
+            _disposeTask ??= DisposeCoreAsync();
+            return new ValueTask(_disposeTask);
+        }
+    }
+
+    private async Task DisposeCoreAsync()
     {
         await _cancellation.CancelAsync();
         if (_listener is not null)
