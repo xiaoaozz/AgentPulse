@@ -32,19 +32,30 @@ public sealed class AgentSession
         UpdatedAt = updatedAt,
     };
 
-    public AgentSession Applying(AgentEvent value, DateTimeOffset updatedAt) => new()
+    public AgentSession Applying(AgentEvent value, DateTimeOffset updatedAt)
     {
-        Id = Id,
-        Agent = value.Agent,
-        Cwd = value.Cwd,
-        Title = NonBlank(value.Title) ?? Title,
-        Phase = SessionPhaseExtensions.FromProtocolValue(value.Phase),
-        Detail = NonBlank(value.Detail) ?? Detail,
-        ProcessId = value.ProcessId ?? ProcessId,
-        Tty = value.Tty ?? Tty,
-        TerminalProcess = value.TerminalProcess ?? TerminalProcess,
-        UpdatedAt = updatedAt,
-    };
+        var incomingPhase = SessionPhaseExtensions.FromProtocolValue(value.Phase);
+        // SessionEnd describes the agent process, not the outcome of its last
+        // turn. Keep an already-recorded result so a later lifecycle event
+        // cannot turn an interrupted/completed task into undeletable history.
+        var nextPhase = incomingPhase == SessionPhase.Offline && Phase.IsClearable()
+            ? Phase
+            : incomingPhase;
+
+        return new AgentSession
+        {
+            Id = Id,
+            Agent = value.Agent,
+            Cwd = value.Cwd,
+            Title = NonBlank(value.Title) ?? Title,
+            Phase = nextPhase,
+            Detail = NonBlank(value.Detail) ?? Detail,
+            ProcessId = value.ProcessId ?? ProcessId,
+            Tty = value.Tty ?? Tty,
+            TerminalProcess = value.TerminalProcess ?? TerminalProcess,
+            UpdatedAt = updatedAt,
+        };
+    }
 
     private static string? NonBlank(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();

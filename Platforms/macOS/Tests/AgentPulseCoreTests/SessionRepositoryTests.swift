@@ -92,10 +92,12 @@ final class SessionRepositoryTests: XCTestCase {
         XCTAssertEqual(repository.ongoingCount, 1)
 
         repository.receive(.init(sessionId: "interrupted", agent: "Codex", cwd: "/tmp/A", phase: .paused))
+        repository.receive(.init(sessionId: "interrupted", agent: "Codex", cwd: "/tmp/A", phase: .offline))
 
         XCTAssertEqual(repository.sessions.map(\.id), ["interrupted"])
         XCTAssertEqual(repository.sessions.first?.phase, .paused)
         XCTAssertEqual(repository.ongoingCount, 0)
+        XCTAssertEqual(repository.clearableCount, 1)
         XCTAssertEqual(repository.globalPhase, .ready)
     }
 
