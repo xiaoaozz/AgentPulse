@@ -69,9 +69,19 @@
           "phase": "paused",
           "detail": "已由用户中止",
           "occurred_at": "2026-07-16T11:12:55Z"
+        },
+        {
+          "session_id": "interrupted",
+          "agent": "Codex",
+          "cwd": "/work/interrupted",
+          "phase": "offline",
+          "occurred_at": "2026-07-16T11:12:56Z"
         }
       ],
       "expected_order": ["interrupted"],
+      "expected_phases": {
+        "interrupted": "paused"
+      },
       "expected_ongoing_count": 0,
       "expected_clearable_count": 1,
       "remove_ids": ["interrupted"],

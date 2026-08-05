@@ -126,7 +126,12 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
         agent = event.agent
         cwd = event.cwd
         if let title = event.title?.nilIfBlank { self.title = title }
-        phase = event.phase
+        // SessionEnd describes the agent process, not the outcome of its last
+        // turn. Keep an already-recorded result so a later lifecycle event
+        // cannot turn an interrupted/completed task into undeletable history.
+        if event.phase != .offline || !phase.isClearable {
+            phase = event.phase
+        }
         if let detail = event.detail?.nilIfBlank { self.detail = detail }
         pid = event.pid ?? pid
         tty = event.tty ?? tty
