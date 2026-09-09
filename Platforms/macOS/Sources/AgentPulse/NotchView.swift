@@ -7,17 +7,30 @@ struct NotchView: View {
     private static let collapseDelay = Duration.milliseconds(120)
 
     @ObservedObject var repository: SessionRepository
-    let onHoverChanged: (Bool) -> Void
+    let mode: StatusSurfaceMode
+    let onExpandedChanged: (Bool) -> Void
+    let onDragEnded: () -> Void
     let onJump: (AgentSession) -> Void
     let onHide: () -> Void
     let onQuit: () -> Void
     @State private var expanded = false
     @State private var hoverTransitionTask: Task<Void, Never>?
     @State private var footerHint: String?
+    @State private var floatingBallHovered = false
 
+    @ViewBuilder
     var body: some View {
+        switch mode {
+        case .notch:
+            notchBody
+        case .floatingBall:
+            floatingBody
+        }
+    }
+
+    private var notchBody: some View {
         VStack(spacing: 0) {
-            collapsedContent
+            notchCollapsedContent
                 .frame(height: 38)
             if expanded {
                 Divider().overlay(Color.white.opacity(0.12))
@@ -55,6 +68,119 @@ struct NotchView: View {
         }
     }
 
+    private var floatingBody: some View {
+        VStack(spacing: 0) {
+            floatingHeader
+            if expanded {
+                Divider().overlay(Color.white.opacity(0.12))
+                expandedToolbar
+                Divider().overlay(Color.white.opacity(0.08))
+                expandedContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Divider().overlay(Color.white.opacity(0.10))
+                expandedFooter
+            }
+        }
+        .foregroundStyle(.white)
+        .background {
+            if expanded {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(hex: 0x18191C).opacity(0.98))
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: expanded ? 18 : 22, style: .continuous))
+        .overlay {
+            if expanded {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(.white.opacity(0.14), lineWidth: 0.75)
+            }
+        }
+        .contentShape(Rectangle())
+        .animation(.easeInOut(duration: 0.18), value: expanded)
+    }
+
+    private var floatingHeader: some View {
+        TimelineView(.periodic(from: .now, by: 0.25)) { context in
+            HStack(spacing: 10) {
+                if expanded {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(statusText(at: context.date))
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(primaryPhase(at: context.date).displayColor)
+                        Text("\(repository.ongoingCount) 个进行中会话")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
+                    Spacer()
+                }
+
+                ZStack {
+                    Circle()
+                        .fill(Color(hex: 0x24262B).opacity(0.98))
+                        .overlay {
+                            Circle()
+                                .stroke(
+                                    primaryPhase(at: context.date).displayColor.opacity(0.72),
+                                    lineWidth: 1.25
+                                )
+                        }
+                        .frame(width: 34, height: 34)
+                        .shadow(
+                            color: primaryPhase(at: context.date).displayColor.opacity(0.22),
+                            radius: floatingBallHovered ? 7 : 4
+                        )
+
+                    Image(systemName: "waveform.path.ecg")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
+                }
+                .overlay(alignment: .topTrailing) {
+                    if repository.ongoingCount > 0 {
+                        Text("\(min(repository.ongoingCount, 99))")
+                            .font(.system(size: 8, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 3)
+                            .frame(minWidth: 14, minHeight: 14)
+                            .background(primaryPhase(at: context.date).displayColor, in: Capsule())
+                            .overlay { Capsule().stroke(.black.opacity(0.30), lineWidth: 0.5) }
+                            .offset(x: 1, y: -1)
+                    }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if repository.ongoingCount == 0 {
+                        Circle()
+                            .fill(primaryPhase(at: context.date).displayColor)
+                            .frame(width: 7, height: 7)
+                            .overlay { Circle().stroke(.black.opacity(0.65), lineWidth: 1) }
+                            .offset(x: -1, y: -1)
+                    }
+                }
+                .scaleEffect(floatingBallHovered ? 1.045 : 1)
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+                .overlay {
+                    FloatingBallInteractionView(
+                        onClick: toggleFloatingPanel,
+                        onDragEnded: onDragEnded
+                    )
+                    .clipShape(Circle())
+                }
+                .onHover { floatingBallHovered = $0 }
+                .help(expanded ? "拖动悬浮球；点击收起" : "拖动悬浮球；点击展开")
+                .accessibilityLabel(expanded ? "收起 AgentPulse" : "展开 AgentPulse")
+            }
+        }
+        .padding(.leading, expanded ? 14 : 0)
+        .frame(height: expanded ? 48 : 44)
+        .animation(.easeOut(duration: 0.14), value: floatingBallHovered)
+    }
+
+    private func toggleFloatingPanel() {
+        expanded.toggle()
+        onExpandedChanged(expanded)
+    }
+
     /// A brief dwell distinguishes an intentional visit from a pointer merely
     /// crossing the menu bar or the notch while moving between applications.
     private func scheduleHoverTransition(expanded target: Bool) {
@@ -70,11 +196,11 @@ struct NotchView: View {
             }
             guard !Task.isCancelled else { return }
             expanded = target
-            onHoverChanged(target)
+            onExpandedChanged(target)
         }
     }
 
-    private var collapsedContent: some View {
+    private var notchCollapsedContent: some View {
         TimelineView(.periodic(from: .now, by: 0.25)) { context in
             HStack(spacing: 0) {
             Text(statusText(at: context.date))
@@ -122,18 +248,18 @@ struct NotchView: View {
         ZStack(alignment: .topTrailing) {
             HStack(spacing: 6) {
                 Spacer()
-                Button(action: hideNotch) {
-                    Image(systemName: "menubar.rectangle")
+                Button(action: minimizeToFloatingBall) {
+                    Image(systemName: "circle.dotted.circle")
                         .font(.system(size: 11, weight: .semibold))
                         .frame(width: 26, height: 26)
                         .background(.white.opacity(0.07), in: Circle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.white.opacity(0.68))
-                .help("隐藏刘海面板，在菜单栏显示图标")
-                .accessibilityLabel("隐藏")
+                .help("收起为悬浮球")
+                .accessibilityLabel("收起为悬浮球")
                 .onHover { hovering in
-                    updateFooterHint("隐藏", hovering: hovering)
+                    updateFooterHint("收起", hovering: hovering)
                 }
 
                 Button(action: onQuit) {
@@ -176,10 +302,10 @@ struct NotchView: View {
         }
     }
 
-    private func hideNotch() {
+    private func minimizeToFloatingBall() {
         hoverTransitionTask?.cancel()
         expanded = false
-        onHoverChanged(false)
+        onExpandedChanged(false)
         onHide()
     }
 
@@ -281,5 +407,84 @@ struct NotchView: View {
 
     private func sessionSubtitle(for session: AgentSession) -> String {
         session.detail ?? session.phase.meaning
+    }
+}
+
+private struct FloatingBallInteractionView: NSViewRepresentable {
+    let onClick: () -> Void
+    let onDragEnded: () -> Void
+
+    func makeNSView(context: Context) -> FloatingBallInteractionNSView {
+        FloatingBallInteractionNSView(onClick: onClick, onDragEnded: onDragEnded)
+    }
+
+    func updateNSView(_ nsView: FloatingBallInteractionNSView, context: Context) {
+        nsView.onClick = onClick
+        nsView.onDragEnded = onDragEnded
+    }
+}
+
+private final class FloatingBallInteractionNSView: NSView {
+    var onClick: () -> Void
+    var onDragEnded: () -> Void
+    private var mouseDownLocation: NSPoint?
+    private var windowOriginAtMouseDown: NSPoint?
+    private var didDrag = false
+
+    init(onClick: @escaping () -> Void, onDragEnded: @escaping () -> Void) {
+        self.onClick = onClick
+        self.onDragEnded = onDragEnded
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        addCursorRect(bounds, cursor: .openHand)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard let window else { return }
+        mouseDownLocation = NSEvent.mouseLocation
+        windowOriginAtMouseDown = window.frame.origin
+        didDrag = false
+        NSCursor.closedHand.set()
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let window,
+              let mouseDownLocation,
+              let windowOriginAtMouseDown else { return }
+
+        let currentLocation = NSEvent.mouseLocation
+        let deltaX = currentLocation.x - mouseDownLocation.x
+        let deltaY = currentLocation.y - mouseDownLocation.y
+        didDrag = didDrag || hypot(deltaX, deltaY) >= 3
+
+        window.setFrameOrigin(
+            NSPoint(
+                x: windowOriginAtMouseDown.x + deltaX,
+                y: windowOriginAtMouseDown.y + deltaY
+            )
+        )
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        let wasDragged = didDrag
+        mouseDownLocation = nil
+        windowOriginAtMouseDown = nil
+        didDrag = false
+        NSCursor.openHand.set()
+
+        onDragEnded()
+        if !wasDragged {
+            onClick()
+        }
     }
 }
