@@ -56,7 +56,7 @@ AgentPulse 只负责状态聚合与入口跳转，不会代替 Agent 审批权�
 
 ## 核心特性
 
-- **macOS 原生刘海面板**：自动识别内置刘海屏幕，在刘海两侧展示状态与进行中会话数；悬停后展开最近会话。
+- **macOS 原生悬浮球 / 刘海面板**：默认以可拖动悬浮球显示状态和进行中会话数，点击展开最近会话；也可在设置中切换为刘海面板。
 - **Windows 原生托盘面板**：常驻系统托盘，在任务栏右下角快速展开 WinUI 3 会话列表。
 - **多 Agent、多会话聚合**：支持 Codex、Claude Code 和遵循通用事件协议的自定义 Agent。
 - **清晰的状态优先级**：等待操作、运行中、暂停、完成、警告和失败等状态自动排序。
@@ -69,7 +69,7 @@ AgentPulse 只负责状态聚合与入口跳转，不会代替 Agent 审批权�
 
 | 平台 | 系统要求 | 交互形态 | 本地事件通道 |
 | --- | --- | --- | --- |
-| macOS | macOS 14+，Apple Silicon / Intel | 刘海常驻面板 | Unix Domain Socket |
+| macOS | macOS 14+，Apple Silicon / Intel | 悬浮球 / 刘海面板 | Unix Domain Socket |
 | Windows | Windows 10 1809+ / Windows 11，x64 | 系统托盘面板 | Named Pipe |
 
 ## 安装
@@ -129,7 +129,7 @@ macOS Unix Socket    Windows Named Pipe
                 │
        Session Repository
                 │
-      Notch / Tray UI Panel
+   Floating Ball / Notch / Tray Panel
 ```
 
 同一 `session_id` 的事件会更新同一条会话记录。所有状态仅保存在内存中，应用退出后不会保留历史会话。

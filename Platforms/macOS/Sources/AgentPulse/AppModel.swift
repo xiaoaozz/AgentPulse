@@ -5,13 +5,23 @@ import Foundation
 
 @MainActor
 final class AppModel: ObservableObject {
+    private static let statusSurfaceModeKey = "statusSurfaceMode"
+
     let repository = SessionRepository()
     @Published var useAttentionColor = true
+    @Published var statusSurfaceMode: StatusSurfaceMode {
+        didSet {
+            UserDefaults.standard.set(statusSurfaceMode.rawValue, forKey: Self.statusSurfaceModeKey)
+            notchPanel?.setMode(statusSurfaceMode)
+        }
+    }
     private var server: SocketServer?
     private var notchPanel: NotchPanelController?
     private var subscriptions: Set<AnyCancellable> = []
 
     init() {
+        statusSurfaceMode = UserDefaults.standard.string(forKey: Self.statusSurfaceModeKey)
+            .flatMap(StatusSurfaceMode.init(rawValue:)) ?? .floatingBall
         let repository = repository
         repository.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -31,6 +41,8 @@ final class AppModel: ObservableObject {
             guard let self else { return }
             self.notchPanel = NotchPanelController(
                 repository: repository,
+                mode: self.statusSurfaceMode,
+                onModeChanged: { [weak self] mode in self?.statusSurfaceMode = mode },
                 onJump: { session in TerminalNavigator.jump(to: session) },
                 onQuit: { NSApplication.shared.terminate(nil) }
             )

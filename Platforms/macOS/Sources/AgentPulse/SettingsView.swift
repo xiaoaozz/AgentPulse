@@ -5,10 +5,22 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("刘海面板") {
-                LabeledContent("显示方式", value: "状态文字 + 会话数量")
-                LabeledContent("菜单栏图标", value: "隐藏刘海面板后显示")
-                Text("点击菜单栏的脉冲图标可恢复刘海面板。")
+            Section("状态面板") {
+                Picker("显示方式", selection: $model.statusSurfaceMode) {
+                    ForEach(StatusSurfaceMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                LabeledContent(
+                    "交互",
+                    value: model.statusSurfaceMode == .floatingBall
+                        ? "拖动定位，点击展开"
+                        : "悬停展开"
+                )
+                LabeledContent("收起按钮", value: "切换为悬浮球")
+                Text("悬浮球会记住拖动位置，点击即可展开最近会话。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
