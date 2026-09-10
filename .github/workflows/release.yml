@@ -129,6 +129,7 @@ jobs:
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           shopt -s nullglob
           macos_assets=(release-assets/macos/AgentPulse-*-macos-*.zip)
