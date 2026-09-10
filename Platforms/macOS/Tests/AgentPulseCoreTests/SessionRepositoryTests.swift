@@ -84,6 +84,10 @@ final class SessionRepositoryTests: XCTestCase {
 
         XCTAssertEqual(repository.sessions.count, 3)
         XCTAssertEqual(repository.ongoingCount, 1)
+        XCTAssertEqual(repository.clearableCount, 1)
+
+        repository.removeCompletedSession(id: "offline")
+        XCTAssertEqual(repository.sessions.map(\.id), ["waiting", "ready"])
     }
 
     func testInterruptedSessionRemainsVisibleButLeavesOngoingCount() {

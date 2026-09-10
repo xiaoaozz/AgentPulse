@@ -31,7 +31,7 @@
                 Background="Transparent"
                 BorderThickness="0"
                 Padding="8,5"
-                ToolTipService.ToolTip="清除所有已中止、已完成、警告和失败的会话">
+                ToolTipService.ToolTip="清除所有已离线、已中止、已完成、警告和失败的会话">
                 <StackPanel Orientation="Horizontal" Spacing="5">
                     <SymbolIcon Symbol="Delete" Width="12" />
                     <TextBlock Text="清除终态" FontSize="11" />
@@ -105,7 +105,7 @@
                                 Background="#12FFFFFF"
                                 BorderThickness="0"
                                 CornerRadius="13"
-                                ToolTipService.ToolTip="删除这个已完成会话">
+                                ToolTipService.ToolTip="删除这条终态会话">
                                 <TextBlock Text="×" FontSize="14" Opacity="0.65" />
                             </Button>
                         </Grid>

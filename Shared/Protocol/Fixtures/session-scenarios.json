@@ -144,6 +144,27 @@
       "expected_clearable_count": 2,
       "remove_ids": ["stale-done", "equal-time"],
       "expected_order_after_removals": ["missing-time"]
+    },
+    {
+      "name": "offline-only lifecycle records can be cleared",
+      "events": [
+        {
+          "session_id": "offline-only",
+          "agent": "Codex",
+          "cwd": "/work/offline-only",
+          "title": "Disconnected session",
+          "phase": "offline",
+          "occurred_at": "2026-07-16T11:10:00Z"
+        }
+      ],
+      "expected_order": ["offline-only"],
+      "expected_phases": {
+        "offline-only": "offline"
+      },
+      "expected_ongoing_count": 0,
+      "expected_clearable_count": 1,
+      "remove_ids": ["offline-only"],
+      "expected_order_after_removals": []
     }
   ]
 }

@@ -21,7 +21,8 @@ public static class SessionPhaseExtensions
         phase is SessionPhase.Preparing or SessionPhase.Running;
 
     public static bool IsClearable(this SessionPhase phase) =>
-        phase is SessionPhase.Done or SessionPhase.Warning or SessionPhase.Failed or SessionPhase.Paused;
+        phase is SessionPhase.Done or SessionPhase.Warning or SessionPhase.Failed or SessionPhase.Paused
+            or SessionPhase.Offline;
 
     public static bool IsOngoing(this SessionPhase phase) =>
         phase.IsActive() || phase.NeedsAttention();

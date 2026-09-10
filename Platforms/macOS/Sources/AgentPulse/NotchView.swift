@@ -238,7 +238,7 @@ struct NotchView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.white.opacity(repository.clearableCount > 0 ? 0.68 : 0.28))
             .disabled(repository.clearableCount == 0)
-            .help("清除所有已中止、已完成、警告和失败的会话")
+            .help("清除所有已离线、已中止、已完成、警告和失败的会话")
         }
         .padding(.horizontal, 14)
         .frame(height: 34)
@@ -362,7 +362,7 @@ struct NotchView: View {
                             .buttonStyle(.plain)
                             .foregroundStyle(.white.opacity(0.58))
                             .padding(.trailing, 10)
-                            .help("删除这个已完成会话")
+                            .help("删除这条终态会话")
                             .accessibilityLabel("删除 \(session.title)")
                         }
                     }
