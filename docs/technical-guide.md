@@ -19,7 +19,7 @@ AgentPulse 只做状态聚合和入口跳转，不代替 Agent 处理权限审�
 - 快速返回：macOS 根据 `terminal_bundle_id` 或 `pid` 激活来源应用；Windows 根据 `pid` 或 `terminal_process` 激活 Windows Terminal、VS Code、Warp 或 PowerShell。
 - 本机事件通道：macOS 使用权限为 `0600` 的 Unix Domain Socket，Windows 使用当前用户 Named Pipe，不开放 TCP 端口。
 - Agent 无关协议：内置 Codex 和 Claude 风格 Hook 适配器，也允许任意程序直接发送 JSON。
-- 终态保留：`paused`、`done`、`warning` 和 `failed` 会话支持单条删除，也可以在展开面板中一键清除。
+- 终态保留：`paused`、`done`、`warning`、`failed` 和 `offline` 会话支持单条删除，也可以在展开面板中一键清除。
 - 精简发布产物：Release 只提供 macOS 使用包、Windows 安装包和 Windows 便携包。
 
 ## 系统要求
@@ -377,7 +377,7 @@ node scripts/agent-pulse-codex-hook.mjs --source MyAgent
 | `warning` | Warning | `#F97316` | 已完成，但存在警告或异常 | 否 | 是 |
 | `failed` | Failed | `#DC2626` | 执行失败 | 否 | 是 |
 | `paused` | Paused | `#8B5CF6` | 任务已由用户中止 | 否 | 是 |
-| `offline` | Offline | `#4B5563` | Agent 离线 | 否 | 否 |
+| `offline` | Offline | `#4B5563` | Agent 离线 | 否 | 是 |
 
 主会话列表排序优先级为：等待操作 → 执行中/准备中 → 暂停 → 空闲 → 完成/警告/失败 → 离线。同一优先级内，最近更新的会话排在前面。对同一 `session_id`，如果新事件的 `occurred_at` 严格早于当前记录的 `updatedAt`，该事件会被整体忽略；相同时间戳继续按到达顺序生效。刘海展开区域独立按最近使用时间倒序展示，最多显示 5 条会话。
 
